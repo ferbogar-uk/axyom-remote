@@ -15,6 +15,12 @@ struct NewSessionSheet: View {
     @State private var prompt = ""
     @State private var sending = false
     @State private var failure: String?
+    @State private var modelId: String?
+
+    private var models: [PlanUsage.ModelChoice] {
+        let all = model.snapshot.planUsage.first(where: { !$0.models.isEmpty })?.models ?? []
+        return ModelPicker.choices(for: agent.providerId, in: all)
+    }
 
     private var canStart: Bool {
         projectId != nil && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending && model.pcStatus.isOnline
@@ -49,6 +55,28 @@ struct NewSessionSheet: View {
                     ForEach(Self.agents, id: \.self) { Text(ProviderName.display($0.providerId)).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .onChange(of: agent) { _, _ in modelId = nil }
+                if !models.isEmpty {
+                    Menu {
+                        Button { modelId = nil } label: {
+                            if modelId == nil { Label("O padrão do PC", systemImage: "checkmark") } else { Text("O padrão do PC") }
+                        }
+                        ForEach(models) { m in
+                            Button { modelId = m.id } label: {
+                                if modelId == m.id { Label(m.name, systemImage: "checkmark") } else { Text(m.name) }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text("Modelo").foregroundStyle(Theme.muted)
+                            Text(models.first(where: { $0.id == modelId })?.name ?? "O padrão do PC").foregroundStyle(Theme.text)
+                            Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(Theme.muted)
+                        }
+                        .font(.subheadline)
+                        .padding(.horizontal, 14).frame(height: 40)
+                        .background(Theme.elevated, in: Capsule())
+                    }
+                }
             }
             VStack(alignment: .leading, spacing: 8) {
                 Text("O que queres que faça?").font(.footnote).foregroundStyle(Theme.muted)
@@ -82,6 +110,7 @@ struct NewSessionSheet: View {
             _ = try await client.createSession(
                 projectId: projectId,
                 provider: agent.providerId,
+                model: modelId,
                 prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
                 targetDeviceId: model.desktopId(forEncryptedProjectId: board.projects.first(where: { $0.id == projectId })?.encryptedId)
             )

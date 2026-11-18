@@ -132,3 +132,12 @@ done). The chip lists the models the PC publishes for the session's provider
 and their effort levels; the choice travels as `options` on the next message
 and the desktop applies it before running it. Current effort comes from the
 index entry's `effortLevel` (or the desktop default). Not tested end to end yet.
+
+Update (2026-11-18, 14:40), autonomous batch 1:
+- Agent replies rendered as Markdown (headings, lists, bold/italic/code, links,
+  fenced code blocks).
+- The agent's tool steps appear in the chat, folded: "3 passos · Correu: swift
+  test"; tap to see each (Claude tool_use, Codex commands/file changes, Cursor).
+- Home: search field (title, project, agent) and long-press "Arquivar sessão"
+  (sessionControl archive, which the desktop already handles).
+- New session: choose the model from the PC's list (or the PC default).

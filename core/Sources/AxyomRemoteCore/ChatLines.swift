@@ -5,6 +5,12 @@ public struct ChatLine: Equatable, Sendable, Identifiable {
     public var id: String
     public var mine: Bool
     public var text: String
+    /// A tool step of the agent ("Correu: git status"), shown small and grouped.
+    public var isStep: Bool = false
+
+    public init(id: String, mine: Bool, text: String, isStep: Bool = false) {
+        self.id = id; self.mine = mine; self.text = text; self.isStep = isStep
+    }
 }
 
 /// Turns the raw synced rows into what a person reads, following the desktop's
@@ -18,16 +24,23 @@ public struct ChatLine: Equatable, Sendable, Identifiable {
 /// Interactive prompts (permission, question, plan) are hidden here because
 /// the screen shows them as cards.
 public enum ChatLines {
-    public static func build(_ items: [TranscriptItem], provider: String) -> [ChatLine] {
+    public static func build(_ items: [TranscriptItem], provider: String, includeSteps: Bool = false) -> [ChatLine] {
         var out: [ChatLine] = []
         for item in items where !item.hidden {
             let mine = item.direction == "input"
-            guard let text = mine ? userText(item) : agentText(item, provider: provider) else { continue }
-            let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !clean.isEmpty else { continue }
-            // The same text twice in a row (a final event repeating its stream) is one message.
-            if let last = out.last, last.mine == mine, last.text == clean { continue }
-            out.append(ChatLine(id: item.id, mine: mine, text: clean))
+            if let text = mine ? userText(item) : agentText(item, provider: provider) {
+                let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                // The same text twice in a row (a final event repeating its stream) is one message.
+                if !clean.isEmpty, !(out.last.map { $0.mine == mine && $0.text == clean && !$0.isStep } ?? false) {
+                    out.append(ChatLine(id: item.id, mine: mine, text: clean))
+                }
+            }
+            // Tool steps come after the text of the same event (the agent says, then does).
+            if includeSteps && !mine, let v = json(item.raw) {
+                for (i, s) in Steps.describe(v).enumerated() where !(out.last.map { $0.isStep && $0.text == s } ?? false) {
+                    out.append(ChatLine(id: "\(item.id)#\(i)", mine: false, text: s, isStep: true))
+                }
+            }
         }
         return out
     }

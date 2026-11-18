@@ -11,16 +11,18 @@ struct ComandoView: View {
     @State private var showNew = false
     @State private var showVoice = false
     @State private var showSettings = false
+    @State private var search = ""
 
     var body: some View {
         NavigationStack {
-            let board = model.board(project: project)
+            let board = filtered(model.board(project: project))
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
                     statusBanner
                     PlanUsageStrip(usage: model.snapshot.planUsage)
                     projectChips(board)
+                    searchField
                     if !board.waiting.isEmpty { waitingSection(board.waiting) }
                     if !board.working.isEmpty { workingSection(board.working) }
                     if !board.recent.isEmpty { recentSection(board.recent) }
@@ -125,6 +127,7 @@ struct ComandoView: View {
                     .card(fill: Theme.amberSurface, stroke: Theme.amberBorder)
                 }
                 .buttonStyle(.plain)
+                .contextMenu { sessionMenu(s) }
             }
         }
     }
@@ -135,6 +138,7 @@ struct ComandoView: View {
             VStack(spacing: 0) {
                 ForEach(Array(sessions.enumerated()), id: \.element.id) { index, s in
                     NavigationLink(value: s.id) { row(s, trailing: "A trabalhar", tint: Theme.green) }.buttonStyle(.plain)
+                        .contextMenu { sessionMenu(s) }
                     if index < sessions.count - 1 { Divider().overlay(Theme.border) }
                 }
             }
@@ -151,6 +155,7 @@ struct ComandoView: View {
                     NavigationLink(value: s.id) {
                         row(s, trailing: RelativeAge.portuguese(from: s.lastActivity), tint: Theme.muted)
                     }.buttonStyle(.plain)
+                    .contextMenu { sessionMenu(s) }
                     if index < sessions.count - 1 { Divider().overlay(Theme.border) }
                 }
             }
@@ -181,6 +186,45 @@ struct ComandoView: View {
                 .font(.subheadline).foregroundStyle(Theme.muted)
         }
         .card()
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
+            TextField("Procurar sessões", text: $search)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .foregroundStyle(Theme.text)
+            if !search.isEmpty {
+                Button { search = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted) }
+                    .accessibilityLabel("Limpar pesquisa")
+            }
+        }
+        .padding(.horizontal, 14).frame(height: 44)
+        .background(Theme.elevated, in: Capsule())
+    }
+
+    /// Keep only sessions whose title, project or agent match the search.
+    private func filtered(_ board: FleetBoard) -> FleetBoard {
+        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return board }
+        let match: (FleetSession) -> Bool = {
+            $0.title.lowercased().contains(q) || $0.projectName.lowercased().contains(q)
+                || ProviderName.display($0.provider).lowercased().contains(q)
+        }
+        return FleetBoard(waiting: board.waiting.filter(match), working: board.working.filter(match),
+                          recent: board.recent.filter(match), projects: board.projects)
+    }
+
+    /// Long-press on a session: archive it on the PC.
+    @ViewBuilder private func sessionMenu(_ s: FleetSession) -> some View {
+        Button(role: .destructive) {
+            guard let client = model.client else { return }
+            let target = s.hostDeviceId ?? model.desktopId(forEncryptedProjectId: s.encryptedProjectId)
+            Task { try? await client.archive(sessionId: s.id, targetDeviceId: target); Prefs.tap() }
+        } label: {
+            Label("Arquivar sessão", systemImage: "archivebox")
+        }
+        .disabled(!pcOnline)
     }
 
     /// Floating bar like the session composer: neutral "new session", orange voice.

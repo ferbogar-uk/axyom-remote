@@ -350,6 +350,11 @@ public actor RemoteClient {
         try await sendControl(sessionId: sessionId, type: "prompt", payload: nil, targetDeviceId: targetDeviceId)
     }
 
+    /// Archive (or bring back) a session on the PC.
+    public func archive(sessionId: String, archived: Bool = true, targetDeviceId: String?) async throws {
+        try await sendControl(sessionId: sessionId, type: "archive", payload: .object(["isArchived": .bool(archived)]), targetDeviceId: targetDeviceId)
+    }
+
     /// Ask the PC to stop what the session is doing.
     public func cancel(sessionId: String, targetDeviceId: String?) async throws {
         try await sendControl(sessionId: sessionId, type: "cancel", payload: nil, targetDeviceId: targetDeviceId)

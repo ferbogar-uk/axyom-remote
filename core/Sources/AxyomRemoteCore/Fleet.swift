@@ -93,6 +93,10 @@ public struct FleetBoard: Equatable, Sendable {
     public var recent: [FleetSession]
     public var projects: [Project]
 
+    public init(waiting: [FleetSession], working: [FleetSession], recent: [FleetSession], projects: [Project]) {
+        self.waiting = waiting; self.working = working; self.recent = recent; self.projects = projects
+    }
+
     /// - Parameters:
     ///   - project: only this project's sessions (nil = all). Project chips always count everything.
     public static func build(_ sessions: [FleetSession], project: String? = nil, recentLimit: Int = 10) -> FleetBoard {

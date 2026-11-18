@@ -29,6 +29,7 @@ struct SessionView: View {
     @State private var images: [PromptImage] = []
     @State private var localQueued: [QueuedPreview] = []
     @State private var pendingModel: String?
+    @State private var expandedSteps: Set<String> = []
     @State private var pendingEffort: String?
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showPhotos = false
@@ -37,7 +38,32 @@ struct SessionView: View {
     @State private var commitMessages: [String: String] = [:]
 
     private var session: FleetSession? { model.snapshot.sessions.first { $0.id == sessionId } }
-    private var visible: [ChatLine] { ChatLines.build(allItems, provider: session?.provider ?? "") }
+    private var visible: [ChatLine] { ChatLines.build(allItems, provider: session?.provider ?? "", includeSteps: true) }
+
+    /// Messages, with runs of consecutive tool steps folded into one group.
+    private enum Row: Identifiable {
+        case message(ChatLine)
+        case steps([ChatLine])
+        var id: String {
+            switch self {
+            case .message(let l): return l.id
+            case .steps(let s): return "steps-" + (s.first?.id ?? "")
+            }
+        }
+    }
+
+    private var rows: [Row] {
+        var out: [Row] = []
+        for line in visible {
+            if line.isStep, case .steps(var run)? = out.last {
+                run.append(line)
+                out[out.count - 1] = .steps(run)
+            } else {
+                out.append(line.isStep ? .steps([line]) : .message(line))
+            }
+        }
+        return out
+    }
     private var online: Bool { model.pcStatus.isOnline }
 
     var body: some View {
@@ -50,7 +76,12 @@ struct SessionView: View {
                     } else if let failure {
                         Text(failure).font(.subheadline).foregroundStyle(Theme.danger).card()
                     }
-                    ForEach(visible) { item in bubble(item) }
+                    ForEach(rows) { row in
+                        switch row {
+                        case .message(let item): bubble(item)
+                        case .steps(let steps): stepsRow(steps)
+                        }
+                    }
                     if !loading && visible.isEmpty && failure == nil {
                         Text("Esta sessão ainda não tem mensagens legíveis.").font(.subheadline).foregroundStyle(Theme.muted)
                     }
@@ -403,8 +434,42 @@ struct SessionView: View {
         (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty) && busyId == nil && model.snapshot.connected
     }
 
+    /// "3 passos · Correu: swift test" — tap to see every step.
+    @ViewBuilder private func stepsRow(_ steps: [ChatLine]) -> some View {
+        let key = steps.first?.id ?? ""
+        let open = expandedSteps.contains(key)
+        VStack(alignment: .leading, spacing: 6) {
+            Button {
+                if open { expandedSteps.remove(key) } else { expandedSteps.insert(key) }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(Theme.muted)
+                        .rotationEffect(.degrees(open ? 90 : 0))
+                    Text(steps.count == 1 ? steps[0].text : "\(steps.count) passos · \(steps.last?.text ?? "")")
+                        .font(.footnote).foregroundStyle(Theme.muted).lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            if open && steps.count > 1 {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(steps) { s in
+                        Text(s.text).font(.system(.footnote, design: .monospaced)).foregroundStyle(Theme.muted).lineLimit(2)
+                    }
+                }
+                .padding(.leading, 18)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
     @ViewBuilder private func bubble(_ item: ChatLine) -> some View {
         let mine = item.mine
+        if !mine {
+            MarkdownText(text: item.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
         Text(item.text)
             .font(.body).foregroundStyle(mine ? Theme.text : Theme.textSoft)
             .textSelection(.enabled)
@@ -412,6 +477,7 @@ struct SessionView: View {
             .background(mine ? Theme.amberFill : .clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(mine ? Theme.amberBorder : .clear, lineWidth: 1))
             .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
+        }
     }
 
     // MARK: Prompt cards
