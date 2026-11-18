@@ -6,6 +6,12 @@ name: iOS compile check
 # ios-compile.yml --ref <branch>). Same idea as Formetra's ios-compile.yml.
 on:
   workflow_dispatch:
+  # Temporary: GitHub only offers the manual button once this file is on main,
+  # so the first compile of the app-skeleton branch is started by a push.
+  # Remove this block when the branch is merged.
+  push:
+    branches: [app-skeleton]
+    paths: ['.github/workflows/ios-compile.yml']
 
 jobs:
   compile:
