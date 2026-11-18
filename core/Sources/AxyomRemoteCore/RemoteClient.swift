@@ -26,7 +26,7 @@ public struct PromptImage: Equatable, Sendable, Identifiable {
 
 /// One transcript row after decryption. `text` is a best-effort readable
 /// rendering; `raw` keeps the desktop's content for richer views later.
-public struct TranscriptItem: Equatable, Sendable, Identifiable {
+public struct TranscriptItem: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var sequence: Int
     public var createdAt: Date
@@ -79,6 +79,17 @@ public actor RemoteClient {
     private var usage: [String: PlanUsage] = [:]
     private var snapshot = Snapshot()
     private var onChange: (@Sendable (Snapshot) -> Void)?
+    private var cache: OfflineCache?
+
+    /// Use an on-device cache: shows the last known sessions straight away (even
+    /// with no network) and keeps it up to date as the index changes.
+    public func useCache(_ cache: OfflineCache) {
+        self.cache = cache
+        guard sessions.isEmpty else { return }
+        let saved = cache.loadIndex()
+        for e in saved { if let s = FleetSession.from(e, crypto: crypto) { sessions[s.id] = s; entries[s.id] = e } }
+        if !saved.isEmpty { publish() }
+    }
     private var pendingCreates: [String: CheckedContinuation<String, Error>] = [:]
 
     public init(
@@ -180,6 +191,7 @@ public actor RemoteClient {
         snapshot.sessions = sessions.values.sorted { $0.lastActivity > $1.lastActivity }
         snapshot.devices = devices.values.sorted { $0.name < $1.name }
         snapshot.planUsage = usage.values.sorted { $0.updatedAt > $1.updatedAt }
+        cache?.saveIndex(Array(entries.values))
         onChange?(snapshot)
     }
 
@@ -376,6 +388,12 @@ public actor RemoteClient {
         entries[sessionId] = current
         if let s = FleetSession.from(current, crypto: crypto) { sessions[sessionId] = s }
         publish()
+    }
+
+    /// Take a queued prompt back before it runs ("Anular"). The PC drops it if it
+    /// has not started and republishes the queue; there is no direct reply.
+    public func removeQueued(sessionId: String, promptId: String, targetDeviceId: String?) async throws {
+        try await sendControl(sessionId: sessionId, type: "remove_queued", payload: .object(["promptId": .string(promptId)]), targetDeviceId: targetDeviceId)
     }
 
     /// Archive (or bring back) a session on the PC.
