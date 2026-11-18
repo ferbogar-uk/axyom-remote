@@ -93,6 +93,7 @@ struct SessionView: View {
             }
         }
         .task { await fullLoad() }
+        .task(id: sessionId) { await live() }
         .task(id: sessionId) { await poll() }
         .refreshable { await fullLoad() }
         .onChange(of: listener.listening) { was, now in
@@ -493,32 +494,60 @@ struct SessionView: View {
         loading = false
     }
 
-    /// Fetch only rows after the last one we have, every 4 seconds while the screen is open.
+    /// Live: keep the session room open; new rows arrive the moment the PC writes
+    /// them (no 4-second wait, no new connection per check). Reconnects with a
+    /// short backoff if the connection drops.
+    private func live() async {
+        var delay: UInt64 = 1
+        while !Task.isCancelled {
+            guard let client = model.client, !loading else {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                continue
+            }
+            do {
+                for try await batch in client.liveTranscript(sessionId: sessionId, afterSequence: allItems.map(\.sequence).max()) {
+                    merge(batch)
+                    delay = 1
+                }
+            } catch {}
+            if Task.isCancelled { break }
+            try? await Task.sleep(nanoseconds: delay * 1_000_000_000)
+            delay = min(delay * 2, 15)
+        }
+    }
+
+    /// Safety net in case live updates stop arriving: a slow check every 15 s.
     private func poll() async {
         while !Task.isCancelled {
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
             guard !Task.isCancelled, !loading, let client = model.client else { continue }
             let last = allItems.map(\.sequence).max()
             guard let fresh = try? await client.loadTranscript(sessionId: sessionId, afterSequence: last) else { continue }
-            let known = Set(allItems.map(\.id))
-            let added = fresh.filter { !known.contains($0.id) }
-            guard !added.isEmpty else { continue }
-            // Build the chat from ALL rows before and after: a reply's text is often
-            // split across rows (deltas + completion), so building from only the new
-            // rows found nothing to say and the reply was never read aloud.
-            let provider = session?.provider ?? ""
-            let before = ChatLines.build(allItems, provider: provider).filter { !$0.mine }.map(\.text)
-            allItems.append(contentsOf: added)
-            if added.contains(where: { $0.direction == "output" }) { notice = nil }
-            if conversation {
-                let after = ChatLines.build(allItems, provider: provider).filter { !$0.mine }.map(\.text)
-                let spoken = Array(after.dropFirst(before.count))
-                if !spoken.isEmpty {
-                    if listener.listening { listener.stop() }
-                    lastReply = spoken.last
-                    phase = .speaking
-                    voice.speak(spoken.map { $0.count > 600 ? String($0.prefix(600)) + "…" : $0 })
-                }
+            merge(fresh)
+        }
+    }
+
+    /// Add new rows; in conversation mode, read aloud the agent text they complete.
+    private func merge(_ fresh: [TranscriptItem]) {
+        let known = Set(allItems.map(\.id))
+        let added = fresh.filter { !known.contains($0.id) }
+        guard !added.isEmpty else { return }
+        // Build the chat from ALL rows before and after: a reply's text is often
+        // split across rows (deltas + completion), so building from only the new
+        // rows found nothing to say and the reply was never read aloud.
+        let provider = session?.provider ?? ""
+        let before = ChatLines.build(allItems, provider: provider).filter { !$0.mine }.map(\.text)
+        allItems.append(contentsOf: added)
+        allItems.sort { $0.sequence < $1.sequence }
+        if added.contains(where: { $0.direction == "output" }) { notice = nil }
+        if conversation {
+            let after = ChatLines.build(allItems, provider: provider).filter { !$0.mine }.map(\.text)
+            let spoken = Array(after.dropFirst(before.count))
+            if !spoken.isEmpty {
+                if listener.listening { listener.stop() }
+                lastReply = spoken.last
+                phase = .speaking
+                voice.speak(spoken.map { $0.count > 600 ? String($0.prefix(600)) + "…" : $0 })
             }
         }
     }

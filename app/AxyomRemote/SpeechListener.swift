@@ -34,8 +34,9 @@ final class SpeechListener: ObservableObject {
     private var silenceTimer: Timer?
     private var autoStop = false
     /// Seconds of silence after speech that end listening when auto-stop is on.
-    /// 2.5 s, the value AVA settled on: shorter cut people off mid-thought.
-    var silenceSeconds: TimeInterval = 2.5
+    /// 1.8 s: pauses no longer erase what was said (TranscriptJoiner keeps it),
+    /// so the wait can be shorter than AVA's 2.5 s; tapping still sends at once.
+    var silenceSeconds: TimeInterval = 1.8
 
     func toggle(autoStop: Bool = false) {
         if listening { stop() } else { self.autoStop = autoStop; start() }

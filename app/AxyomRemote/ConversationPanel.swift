@@ -30,7 +30,7 @@ struct ConversationPanel: View {
     private var hint: String {
         switch phase {
         case .idle: return "Não ouvi nada. Toca no círculo quando quiseres continuar."
-        case .listening: return "Fala à vontade. Envio quando ficares 2,5 s em silêncio. Toca para enviar já."
+        case .listening: return "Fala à vontade. Envio quando ficares 2 s em silêncio. Toca para enviar já."
         case .waiting: return "Assim que o agente responder, leio em voz alta."
         case .speaking: return "Toca para interromper e falar."
         }

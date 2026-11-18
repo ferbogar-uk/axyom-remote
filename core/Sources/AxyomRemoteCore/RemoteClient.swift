@@ -362,6 +362,61 @@ public actor RemoteClient {
         for (_, c) in all { c.resume(throwing: error) }
     }
 
+    /// Keep a session room open and stream its rows as they are written: first
+    /// every row after `afterSequence` (paged), then each new row the server
+    /// broadcasts, with no polling delay. The stream ends (throws) when the
+    /// socket drops; the caller reconnects from its last sequence.
+    public nonisolated func liveTranscript(sessionId: String, afterSequence: Int?) -> AsyncThrowingStream<[TranscriptItem], Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task { await self.runLive(sessionId: sessionId, afterSequence: afterSequence, continuation: continuation) }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func runLive(sessionId: String, afterSequence: Int?, continuation: AsyncThrowingStream<[TranscriptItem], Error>.Continuation) async {
+        let room = RoomIds.session(org: pairing.org, member: pairing.member, sessionId: sessionId)
+        guard let u = url(room: room) else { continuation.finish(throwing: ClientError.refused("bad server address")); return }
+        let socket: SyncSocket
+        do { socket = try await factory(u) } catch { continuation.finish(throwing: error); return }
+        let sleep = self.sleep
+        let pinger = Task {
+            while !Task.isCancelled {
+                await sleep(25)
+                if Task.isCancelled { break }
+                try? await socket.send(ClientMessage.ping.encoded())
+            }
+        }
+        defer { pinger.cancel(); socket.close() }
+        do {
+            var since = afterSequence
+            var catchingUp = true
+            try await socket.send(ClientMessage.syncRequest(sinceSeq: since).encoded())
+            while !Task.isCancelled {
+                let msg = try ServerMessage.decode(try await socket.receive())
+                switch msg {
+                case .syncResponse(let messages, _, let hasMore, let cursor):
+                    let items = messages.compactMap { Self.decryptRow($0, crypto: crypto) }
+                    if !items.isEmpty { continuation.yield(items) }
+                    if catchingUp, hasMore, let c = cursor, let n = Int(c) {
+                        since = n
+                        try await socket.send(ClientMessage.syncRequest(sinceSeq: since).encoded())
+                    } else {
+                        catchingUp = false
+                    }
+                case .messageBroadcast(let m):
+                    if let item = Self.decryptRow(m, crypto: crypto) { continuation.yield([item]) }
+                case .error(let code, let message, _):
+                    throw ClientError.refused("\(code): \(message)")
+                default:
+                    continue
+                }
+            }
+            continuation.finish()
+        } catch {
+            continuation.finish(throwing: error)
+        }
+    }
+
     /// Read a whole transcript (all pages) from the session room, then close it.
     public func loadTranscript(sessionId: String, afterSequence: Int? = nil) async throws -> [TranscriptItem] {
         let room = RoomIds.session(org: pairing.org, member: pairing.member, sessionId: sessionId)
