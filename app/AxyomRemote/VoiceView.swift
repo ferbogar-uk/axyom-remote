@@ -85,18 +85,18 @@ struct VoiceView: View {
             }
             .card(fill: Theme.amberSurface, stroke: Theme.amberBorder)
         case .reply(let prompt):
-            actionCard(title: "Responder", detail: prompt, confirm: "Confirmar e enviar") { s in
-                try await $0.sendPrompt(sessionId: s.id, text: prompt, source: "voice", targetDeviceId: s.hostDeviceId ?? model.desktopDeviceId)
+            actionCard(title: "Responder", detail: prompt, confirm: "Confirmar e enviar") { s in { client in
+                try await client.sendPrompt(sessionId: s.id, text: prompt, source: "voice", targetDeviceId: s.hostDeviceId ?? model.desktopDeviceId)
                 return "Resposta enviada para \"\(s.title)\"."
-            }
+            } }
         case .approve:
-            actionCard(title: "Aprovar", detail: "O primeiro pedido de permissão ou plano à espera nesta sessão.", confirm: "Confirmar e aprovar") { s in
-                try await decide(s, allow: true, client: $0)
-            }
+            actionCard(title: "Aprovar", detail: "O primeiro pedido de permissão ou plano à espera nesta sessão.", confirm: "Confirmar e aprovar") { s in { client in
+                try await decide(s, allow: true, client: client)
+            } }
         case .deny:
-            actionCard(title: "Recusar", detail: "O primeiro pedido de permissão ou plano à espera nesta sessão.", confirm: "Confirmar e recusar") { s in
-                try await decide(s, allow: false, client: $0)
-            }
+            actionCard(title: "Recusar", detail: "O primeiro pedido de permissão ou plano à espera nesta sessão.", confirm: "Confirmar e recusar") { s in { client in
+                try await decide(s, allow: false, client: client)
+            } }
         case .status:
             Text("À espera de ti: \(board.waiting.count). A trabalhar: \(board.working.count).")
                 .font(.subheadline).foregroundStyle(Theme.textSoft).card()
