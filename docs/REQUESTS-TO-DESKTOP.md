@@ -49,7 +49,9 @@ Status: done on the server (axyom-backend d186d36, sync/PROTOCOL.md "Mobile
 push"). Reply is `pushTokenRegistered { deviceId, pushConfigured }`;
 `environment` "production" | "sandbox"; pushes on hasPendingPrompt false→true
 (kind "waiting") and isExecuting true→false (kind "finished"), one per session
-and kind per 60 s, never to the author or to a phone open right now. Ricardo added the APNs key and turned Push on for com.axyom.remote
+and kind per 60 s, never to the author or to a phone open right now. Tested on the real
+iPhone 18 Nov 2026 20:35: a server test push arrived on the lock screen and
+the Apple Watch. Ricardo added the APNs key and turned Push on for com.axyom.remote
 (18 Nov 2026). The phone sends `registerPushToken` on every connect and
 `unregisterPushToken` on unpair; tapping the alert opens its sessionId. Not
 yet tested on a device.
@@ -184,4 +186,5 @@ Secrets AZURE_SPEECH_KEY / AZURE_SPEECH_REGION: Ricardo pastes them with the
 "AXYOM - chave Azure no servidor" script on his desktop. Until then
 /voice/status says configured: false. Tests: 6 unit tests
 (`node --test test/voice.test.ts`) and the live smoke test; the real MP3 check
-runs once the key is in.
+ran once the key was in: Azure returned MP3 in under 1 s (18 Nov 2026).
+Not yet heard from the phone.
