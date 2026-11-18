@@ -47,6 +47,14 @@ struct ComandoView: View {
             .toolbar(.hidden, for: .navigationBar)
             .background(Theme.background)
         }
+        .onChange(of: model.openRequest) { _, id in
+            guard let id else { return }
+            path = [id]
+            model.openRequest = nil
+        }
+        .onAppear {
+            if let id = model.openRequest { path = [id]; model.openRequest = nil }
+        }
         .sheet(isPresented: $showNew) { NewSessionSheet(board: model.board()).environmentObject(model) }
         .sheet(isPresented: $showVoice) { VoiceView().environmentObject(model) }
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(model) }

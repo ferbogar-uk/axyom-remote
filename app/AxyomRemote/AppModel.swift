@@ -10,6 +10,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var pairing: PairingPayload?
     @Published private(set) var snapshot = RemoteClient.Snapshot()
     @Published var pairingError: String?
+    /// A conversation to open because a notification was tapped.
+    @Published var openRequest: String?
 
     private(set) var client: RemoteClient?
     /// Last sessions and conversations, kept on the phone for offline viewing.
@@ -21,7 +23,31 @@ final class AppModel: ObservableObject {
     private var finishes = FinishWatcher()
 
     init() {
+        let bridge = PushBridge.shared
+        bridge.onToken = { [weak self] token in self?.sendPushToken(token) }
+        bridge.onOpen = { [weak self] id in self?.openRequest = id }
+        if let pending = bridge.pendingOpen { openRequest = pending; bridge.pendingOpen = nil }
         if let saved = PairingKeychain.load() { connect(saved) }
+    }
+
+    /// Push to this phone with the app closed: "a registar", "ativo", "servidor sem chave", "recusado".
+    var pushStatus: String {
+        if PushBridge.shared.failed { return "iPhone recusou" }
+        switch snapshot.pushReady {
+        case true?: return "ativo"
+        case false?: return "servidor sem chave"
+        case nil: return PushBridge.shared.token == nil ? "por ativar" : "a registar"
+        }
+    }
+
+    private func sendPushToken(_ token: String) {
+        #if DEBUG
+        let development = true
+        #else
+        let development = false
+        #endif
+        guard let client else { return }
+        Task { await client.setPushToken(token, development: development) }
     }
 
     var pcStatus: PCStatus { PCStatus.from(devices: snapshot.devices) }
@@ -59,7 +85,7 @@ final class AppModel: ObservableObject {
     func unpair() {
         let old = client
         client = nil
-        Task { await old?.stop() }
+        Task { await old?.clearPushToken(); await old?.stop() }
         PairingKeychain.delete()
         cache.clear()
         pairing = nil
@@ -85,7 +111,7 @@ final class AppModel: ObservableObject {
 
     /// Local notification when a session starts waiting for you. It only fires
     /// while the app is running (open or recently in the background): iOS
-    /// suspends the connection soon after. Real push needs the server (docs/REQUESTS-TO-DESKTOP.md).
+    /// suspends the connection soon after. With the app closed the server sends an APNs push instead.
     private func notifyWaiting(_ s: FleetSession) {
         guard Prefs.notifications, UIApplication.shared.applicationState != .active else { return }
         let content = UNMutableNotificationContent()
@@ -97,7 +123,10 @@ final class AppModel: ObservableObject {
     }
 
     private func askNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            guard granted else { return }
+            Task { @MainActor in UIApplication.shared.registerForRemoteNotifications() }
+        }
     }
 
     private func connect(_ payload: PairingPayload) {
@@ -125,6 +154,7 @@ final class AppModel: ObservableObject {
             }
             await remote.useCache(cache)
             await remote.start()
+            if let token = PushBridge.shared.token { await MainActor.run { self.sendPushToken(token) } }
         }
     }
 }

@@ -195,6 +195,8 @@ public enum ServerMessage: Equatable, Sendable {
     case deviceLeft(deviceId: String)
     case createSessionResponse(requestId: String, success: Bool, sessionId: String?, error: String?)
     case error(code: String, message: String, requestId: String?)
+    /// Reply to registerPushToken. `pushConfigured` false = the server has no APNs key yet.
+    case registerPushTokenResult(deviceId: String, ok: Bool, pushConfigured: Bool)
     /// A desktop's plan usage (Claude, Codex, ...), encrypted like message content.
     case planUsageBroadcast(deviceId: String, encryptedUsage: String, usageIv: String, updatedAt: Double?)
     case pong
@@ -215,6 +217,7 @@ public enum ServerMessage: Equatable, Sendable {
         struct R: Decodable { let requestId: String; let success: Bool; let sessionId: String?; let error: String? }
         let response: R
     }
+    private struct PushResult: Decodable { let deviceId: String; let ok: Bool?; let pushConfigured: Bool? }
     private struct Usage: Decodable { let deviceId: String; let encryptedUsage: String; let usageIv: String; let updatedAt: Double? }
     private struct Err: Decodable { let code: String; let message: String; let requestId: String? }
 
@@ -240,6 +243,9 @@ public enum ServerMessage: Equatable, Sendable {
         case "error":
             let e = try d.decode(Err.self, from: data)
             return .error(code: e.code, message: e.message, requestId: e.requestId)
+        case "registerPushTokenResult":
+            let r = try d.decode(PushResult.self, from: data)
+            return .registerPushTokenResult(deviceId: r.deviceId, ok: r.ok ?? false, pushConfigured: r.pushConfigured ?? false)
         case "planUsageBroadcast":
             let u = try d.decode(Usage.self, from: data)
             return .planUsageBroadcast(deviceId: u.deviceId, encryptedUsage: u.encryptedUsage, usageIv: u.usageIv, updatedAt: u.updatedAt)
@@ -258,6 +264,9 @@ public enum ClientMessage: Equatable, Sendable {
     case sessionControl(sessionId: String, messageType: String, payload: JSONValue?, sentByDeviceId: String, targetDeviceId: String?, timestamp: Double)
     /// Write (part of) a session's index entry. Omitted fields keep their stored value.
     case indexUpdate(SessionIndexEntry)
+    /// Register this phone's APNs token so the server can push when the app is closed.
+    case registerPushToken(deviceId: String, token: String, development: Bool)
+    case unregisterPushToken(deviceId: String)
     case ping
 
     public func encoded() throws -> String {
@@ -285,6 +294,13 @@ public enum ClientMessage: Equatable, Sendable {
             object = ["type": .string("sessionControl"), "message": .object(m)]
         case .indexUpdate(let entry):
             object = ["type": .string("indexUpdate"), "session": try JSONValue.from(entry)]
+        case .registerPushToken(let deviceId, let token, let development):
+            var o: [String: JSONValue] = ["type": .string("registerPushToken"), "deviceId": .string(deviceId),
+                                          "token": .string(token), "platform": .string("ios")]
+            if development { o["environment"] = .string("development") }
+            object = o
+        case .unregisterPushToken(let deviceId):
+            object = ["type": .string("unregisterPushToken"), "deviceId": .string(deviceId)]
         case .ping:
             object = ["type": .string("ping")]
         }

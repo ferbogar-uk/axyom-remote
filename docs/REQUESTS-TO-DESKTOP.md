@@ -45,6 +45,15 @@ Needed for real push:
 The iPhone side (token registration, Push capability, opening the session from
 the notification) will be done once the server message exists.
 
+Status: done on the server (axyom-backend d186d36, sync/PROTOCOL.md "Mobile
+push"). Reply is `pushTokenRegistered { deviceId, pushConfigured }`;
+`environment` "production" | "sandbox"; pushes on hasPendingPrompt false→true
+(kind "waiting") and isExecuting true→false (kind "finished"), one per session
+and kind per 60 s, never to the author or to a phone open right now. Ricardo added the APNs key and turned Push on for com.axyom.remote
+(18 Nov 2026). The phone sends `registerPushToken` on every connect and
+`unregisterPushToken` on unpair; tapping the alert opens its sessionId. Not
+yet tested on a device.
+
 ## 3. Plan usage / progress on the iPhone
 
 Status: delivered by the desktop (planUsageBroadcast, HANDOFF 6a); the phone
@@ -126,3 +135,53 @@ Send it exactly as proposed: sessionControl `remove_queued`, `payload:
 - a prompt from another session → ignored.
 There is no reply message: the phone learns the result from the next
 `queuedPrompts` publish. Not tested with a real phone yet.
+
+## 7. Azure neural voice for the iPhone, through the sync server
+
+Ricardo created an Azure Speech key (18 Nov 2026) so the phone can speak
+replies with the same neural voice as AVA instead of the iPhone system voice.
+The key must stay on the server (this repo is public and an app binary can be
+unpacked), so the phone needs a small authenticated endpoint on axyom-sync.
+
+Proposal:
+- Worker secrets `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION` (Ricardo pastes
+  them; never in a repo).
+- `POST /voice/tts` with the same personal JWT the WebSocket uses (header
+  `Authorization: Bearer …`), body `{ text, voice?, rate? }`, text capped at
+  ~3000 chars, a sensible per-user rate limit.
+- The Worker calls Azure TTS (`audio-24khz-48kbitrate-mono-mp3`, default voice
+  `pt-BR-FranciscaNeural` or whatever AVA uses) and streams the MP3 back.
+- `GET /voice/status` → `{ configured: bool, voices: [...] }` so the phone can
+  show the option only when it works.
+- Optional later: `POST /voice/stt` for Azure recognition (the phone keeps
+  Apple recognition until then).
+
+The phone will fall back to the system voice whenever the endpoint is
+missing, unconfigured or fails.
+
+Status: DONE on the server (axyom-backend 898cc23, deployed 18 Nov 2026).
+Exact contract in axyom-backend/sync/PROTOCOL.md, "Voice". Auth on both:
+`Authorization: Bearer <same personal JWT as the WebSocket>`.
+
+    GET  /voice/status
+    → { "configured": bool, "defaultVoice": "pt-BR-MacerioMultilingualNeural",
+        "voices": [ { "id", "lang", "label" } ], "maxChars": 3000,
+        "format": "audio-24khz-48kbitrate-mono-mp3", "month": "YYYY-MM",
+        "usedChars": n, "monthlyCharCap": 200000 }
+
+    POST /voice/tts  { "text": "...", "voice"?: "en-GB-RyanNeural", "rate"?: 10 | "+10%" }
+    → 200 audio/mpeg (streamed MP3)
+
+- Default voice is pt-BR-MacerioMultilingualNeural (what Ricardo picked on the
+  desktop, not Francisca); listed voices: Macerio, Francisca, en-GB Ryan,
+  en-GB Sonia. Any `xx-YY-NameNeural` is accepted; language comes from it.
+- Errors are JSON `{ "error" }`: 400 text_required | text_too_long | bad_voice |
+  bad_rate | bad_json; 401; 429 rate_limited (30/min, Retry-After) |
+  monthly_cap | azure_busy; 503 not_configured; 502 azure_auth | azure_error.
+  Fall back to the system voice on anything but 200.
+- `/voice/stt` is not implemented yet.
+Secrets AZURE_SPEECH_KEY / AZURE_SPEECH_REGION: Ricardo pastes them with the
+"AXYOM - chave Azure no servidor" script on his desktop. Until then
+/voice/status says configured: false. Tests: 6 unit tests
+(`node --test test/voice.test.ts`) and the live smoke test; the real MP3 check
+runs once the key is in.

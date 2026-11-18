@@ -86,6 +86,8 @@ struct SettingsView: View {
                 Section {
                     toggleRow("bell", "Avisar quando um agente espera por ti", isOn: $notifications)
                     toggleRow("checkmark.circle", "Avisar quando um agente termina", isOn: $notifyFinished)
+                    row("iphone.radiowaves.left.and.right", "Avisos com a app fechada", detail: model.pushStatus)
+                        .listRowBackground(Theme.surface)
                     toggleRow("hand.tap", "Vibração ao enviar", isOn: $haptics)
                     Button {
                         if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
@@ -96,7 +98,7 @@ struct SettingsView: View {
                 } header: {
                     Text("App")
                 } footer: {
-                    Text("Os avisos chegam enquanto a app está aberta ou acabou de ir para segundo plano. Com o iPhone bloqueado é preciso o servidor (pedido #2).")
+                    Text("Com a app fechada ou o iPhone bloqueado, o servidor envia o aviso (texto genérico, sem conteúdo da conversa). Tocar no aviso abre a conversa.")
                 }
 
                 Section("Sobre") {

@@ -48,6 +48,8 @@ public actor RemoteClient {
         public var lastError: String?
         /// Rows the phone could not decrypt (written under another key).
         public var unreadableRows = 0
+        /// Push with the app closed: nil = not registered yet; true = server will push; false = server has no APNs key.
+        public var pushReady: Bool?
         /// Plan usage per desktop (latest broadcast each), newest first.
         public var planUsage: [PlanUsage] = []
         public init() {}
@@ -80,6 +82,22 @@ public actor RemoteClient {
     private var snapshot = Snapshot()
     private var onChange: (@Sendable (Snapshot) -> Void)?
     private var cache: OfflineCache?
+    private var pushToken: (token: String, development: Bool)?
+
+    /// Give the server this phone's APNs token. Sent now if connected, and
+    /// again on every reconnect (the server keeps the latest per device).
+    public func setPushToken(_ token: String, development: Bool = false) async {
+        pushToken = (token.lowercased(), development)
+        if let socket = index { try? await socket.send(ClientMessage.registerPushToken(deviceId: device.deviceId, token: token.lowercased(), development: development).encoded()) }
+    }
+
+    /// Stop push to this phone (used when unpairing).
+    public func clearPushToken() async {
+        pushToken = nil
+        if let socket = index { try? await socket.send(ClientMessage.unregisterPushToken(deviceId: device.deviceId).encoded()) }
+        snapshot.pushReady = nil
+        publish()
+    }
 
     /// Use an on-device cache: shows the last known sessions straight away (even
     /// with no network) and keeps it up to date as the index changes.
@@ -149,6 +167,9 @@ public actor RemoteClient {
                 index = socket
                 try await socket.send(ClientMessage.deviceAnnounce(device).encoded())
                 try await socket.send(ClientMessage.indexSyncRequest.encoded())
+                if let push = pushToken {
+                    try await socket.send(ClientMessage.registerPushToken(deviceId: device.deviceId, token: push.token, development: push.development).encoded())
+                }
                 setConnected(true)
                 backoff = 1
                 startPinging(socket)
@@ -224,6 +245,9 @@ public actor RemoteClient {
                 else { cont.resume(throwing: ClientError.refused(error ?? "the desktop refused")) }
             }
             return
+        case .registerPushTokenResult(let deviceId, let ok, let configured):
+            guard deviceId == device.deviceId else { return }
+            snapshot.pushReady = ok && configured
         case .planUsageBroadcast(let deviceId, let encrypted, let iv, _):
             guard let u = PlanUsage.decrypt(deviceId: deviceId, encryptedUsage: encrypted, usageIv: iv, crypto: crypto) else { return }
             usage[deviceId] = u
