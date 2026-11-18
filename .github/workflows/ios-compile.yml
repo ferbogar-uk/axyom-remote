@@ -50,7 +50,11 @@ jobs:
           echo "--- app bundle contents"
           ls "$app"
           test -f "$app/PrivacyInfo.xcprivacy" && echo "Privacy manifest: included" || { echo "::error::Privacy manifest missing from the app bundle"; exit 1; }
+          enc=$(/usr/libexec/PlistBuddy -c "Print :ITSAppUsesNonExemptEncryption" "$app/Info.plist" 2>/dev/null || echo missing)
+          echo "ITSAppUsesNonExemptEncryption: $enc"
+          test "$enc" = "false" || { echo "::error::ITSAppUsesNonExemptEncryption not in the app Info.plist"; exit 1; }
 # recompile 2
 # recompile 3
 # recompile reply-voice
 # recompile voice-fix
+# recompile compliance

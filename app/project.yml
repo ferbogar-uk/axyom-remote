@@ -28,6 +28,15 @@ targets:
       - AxyomRemote
     dependencies:
       - package: AxyomRemoteCore
+    # Extra Info.plist keys, merged with the generated ones (GENERATE_INFOPLIST_FILE).
+    info:
+      path: AxyomRemote/Info.plist
+      properties:
+        # Export compliance answered once by Ricardo (2026-11-18): standard
+        # encryption only (AES-GCM / PBKDF2 / TLS), not distributed in France,
+        # no documentation required. NO = exempt, so App Store Connect stops
+        # asking on every build ("Missing Compliance").
+        ITSAppUsesNonExemptEncryption: false
     settings:
       base:
         # PLACEHOLDER: not registered anywhere yet. HANDOFF step 4: Ricardo
@@ -46,9 +55,6 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         # The approved design is dark only.
         INFOPLIST_KEY_UIUserInterfaceStyle: Dark
-        # ITSAppUsesNonExemptEncryption is deliberately NOT set: the app does
-        # AES-GCM/PBKDF2 itself, so the export-compliance answer is Ricardo's
-        # decision, not a default copied from Formetra.
         CODE_SIGN_STYLE: Automatic
         # Signing team is chosen in Xcode / CI secrets. Never commit one here.
         DEVELOPMENT_TEAM: ""
