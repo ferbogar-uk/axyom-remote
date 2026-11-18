@@ -1,0 +1,209 @@
+import Foundation
+
+/// Arbitrary JSON, for fields the phone passes through or only partly reads.
+public enum JSONValue: Codable, Equatable, Sendable {
+    case null, bool(Bool), number(Double), string(String), array([JSONValue]), object([String: JSONValue])
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if c.decodeNil() { self = .null }
+        else if let b = try? c.decode(Bool.self) { self = .bool(b) }
+        else if let n = try? c.decode(Double.self) { self = .number(n) }
+        else if let s = try? c.decode(String.self) { self = .string(s) }
+        else if let a = try? c.decode([JSONValue].self) { self = .array(a) }
+        else { self = .object(try c.decode([String: JSONValue].self)) }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .null: try c.encodeNil()
+        case .bool(let b): try c.encode(b)
+        case .number(let n): try c.encode(n)
+        case .string(let s): try c.encode(s)
+        case .array(let a): try c.encode(a)
+        case .object(let o): try c.encode(o)
+        }
+    }
+
+    public subscript(key: String) -> JSONValue? {
+        if case .object(let o) = self { return o[key] }
+        return nil
+    }
+
+    public var string: String? { if case .string(let s) = self { return s }; return nil }
+    public var bool: Bool? { if case .bool(let b) = self { return b }; return nil }
+    public var number: Double? { if case .number(let n) = self { return n }; return nil }
+}
+
+// Mirrors of packages/runtime/src/sync/collabV3WireTypes.ts (the subset the phone uses).
+
+public struct EncryptedMessage: Codable, Equatable, Sendable {
+    public var id: String
+    public var sequence: Int
+    public var createdAt: Double
+    public var source: String
+    public var direction: String
+    public var encryptedContent: String
+    public var iv: String
+    public var metadata: JSONValue?
+}
+
+public struct SessionIndexEntry: Codable, Equatable, Sendable {
+    public var sessionId: String
+    public var encryptedProjectId: String
+    public var projectIdIv: String
+    public var encryptedTitle: String?
+    public var titleIv: String?
+    public var provider: String
+    public var model: String?
+    public var mode: String?
+    public var sessionType: String?
+    public var parentSessionId: String?
+    public var hostDeviceId: String?
+    public var agentRole: String?
+    public var isArchived: Bool?
+    public var isPinned: Bool?
+    public var messageCount: Int?
+    public var lastMessageAt: Double
+    public var createdAt: Double
+    public var updatedAt: Double
+    public var isExecuting: Bool?
+    public var queuedPromptCount: Int?
+    public var hasPendingPrompt: Bool?
+    public var encryptedClientMetadata: String?
+    public var clientMetadataIv: String?
+    public var lastReadAt: Double?
+}
+
+public struct DeviceInfo: Codable, Equatable, Sendable {
+    public var deviceId: String
+    public var name: String
+    public var type: String          // desktop | mobile | tablet | headless | unknown
+    public var platform: String
+    public var appVersion: String?
+    public var connectedAt: Double
+    public var lastActiveAt: Double
+    public var isFocused: Bool?
+    public var status: String?
+    public var isOnline: Bool?
+
+    public init(deviceId: String, name: String, type: String, platform: String, appVersion: String? = nil, connectedAt: Double, lastActiveAt: Double, isFocused: Bool? = nil, status: String? = nil) {
+        self.deviceId = deviceId
+        self.name = name
+        self.type = type
+        self.platform = platform
+        self.appVersion = appVersion
+        self.connectedAt = connectedAt
+        self.lastActiveAt = lastActiveAt
+        self.isFocused = isFocused
+        self.status = status
+    }
+}
+
+/// Ask the desktop to start a session (relayed by the server to the PC).
+public struct CreateSessionRequest: Codable, Equatable, Sendable {
+    public var requestId: String
+    public var encryptedProjectId: String
+    public var projectIdIv: String
+    public var encryptedInitialPrompt: String?
+    public var initialPromptIv: String?
+    public var provider: String?
+    public var model: String?
+    public var timestamp: Double
+}
+
+public enum ServerMessage: Equatable, Sendable {
+    case syncResponse(messages: [EncryptedMessage], metadata: JSONValue?, hasMore: Bool, cursor: String?)
+    case messageBroadcast(EncryptedMessage)
+    case metadataBroadcast(JSONValue)
+    case indexSyncResponse([SessionIndexEntry])
+    case indexBroadcast(SessionIndexEntry)
+    case indexDeleteBroadcast(sessionId: String)
+    case devicesList([DeviceInfo])
+    case deviceJoined(DeviceInfo)
+    case deviceLeft(deviceId: String)
+    case createSessionResponse(requestId: String, success: Bool, sessionId: String?, error: String?)
+    case error(code: String, message: String, requestId: String?)
+    case pong
+    /// A message type this build does not handle yet (kept so it is visible, not dropped silently).
+    case unhandled(type: String)
+
+    private struct Envelope: Decodable { let type: String }
+    private struct SyncResponse: Decodable { let messages: [EncryptedMessage]; let metadata: JSONValue?; let hasMore: Bool; let cursor: String? }
+    private struct MessageB: Decodable { let message: EncryptedMessage }
+    private struct MetaB: Decodable { let metadata: JSONValue }
+    private struct IndexSync: Decodable { let sessions: [SessionIndexEntry] }
+    private struct IndexB: Decodable { let session: SessionIndexEntry }
+    private struct SessionIdB: Decodable { let sessionId: String }
+    private struct Devices: Decodable { let devices: [DeviceInfo] }
+    private struct DeviceB: Decodable { let device: DeviceInfo }
+    private struct DeviceIdB: Decodable { let deviceId: String }
+    private struct CreateResp: Decodable {
+        struct R: Decodable { let requestId: String; let success: Bool; let sessionId: String?; let error: String? }
+        let response: R
+    }
+    private struct Err: Decodable { let code: String; let message: String; let requestId: String? }
+
+    public static func decode(_ text: String) throws -> ServerMessage {
+        let data = Data(text.utf8)
+        let d = JSONDecoder()
+        let type = try d.decode(Envelope.self, from: data).type
+        switch type {
+        case "syncResponse":
+            let r = try d.decode(SyncResponse.self, from: data)
+            return .syncResponse(messages: r.messages, metadata: r.metadata, hasMore: r.hasMore, cursor: r.cursor)
+        case "messageBroadcast": return .messageBroadcast(try d.decode(MessageB.self, from: data).message)
+        case "metadataBroadcast": return .metadataBroadcast(try d.decode(MetaB.self, from: data).metadata)
+        case "indexSyncResponse": return .indexSyncResponse(try d.decode(IndexSync.self, from: data).sessions)
+        case "indexBroadcast": return .indexBroadcast(try d.decode(IndexB.self, from: data).session)
+        case "indexDeleteBroadcast": return .indexDeleteBroadcast(sessionId: try d.decode(SessionIdB.self, from: data).sessionId)
+        case "devicesList": return .devicesList(try d.decode(Devices.self, from: data).devices)
+        case "deviceJoined": return .deviceJoined(try d.decode(DeviceB.self, from: data).device)
+        case "deviceLeft": return .deviceLeft(deviceId: try d.decode(DeviceIdB.self, from: data).deviceId)
+        case "createSessionResponseBroadcast":
+            let r = try d.decode(CreateResp.self, from: data).response
+            return .createSessionResponse(requestId: r.requestId, success: r.success, sessionId: r.sessionId, error: r.error)
+        case "error":
+            let e = try d.decode(Err.self, from: data)
+            return .error(code: e.code, message: e.message, requestId: e.requestId)
+        case "pong": return .pong
+        default: return .unhandled(type: type)
+        }
+    }
+}
+
+public enum ClientMessage: Equatable, Sendable {
+    case syncRequest(sinceSeq: Int?)
+    case indexSyncRequest
+    case deviceAnnounce(DeviceInfo)
+    case createSessionRequest(CreateSessionRequest, targetDeviceId: String?)
+    case ping
+
+    public func encoded() throws -> String {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.sortedKeys]
+        let object: [String: JSONValue]
+        switch self {
+        case .syncRequest(let since):
+            object = since.map { ["type": .string("syncRequest"), "sinceSeq": .number(Double($0))] } ?? ["type": .string("syncRequest")]
+        case .indexSyncRequest:
+            object = ["type": .string("indexSyncRequest")]
+        case .deviceAnnounce(let device):
+            object = ["type": .string("deviceAnnounce"), "device": try JSONValue.from(device)]
+        case .createSessionRequest(let request, let target):
+            var o: [String: JSONValue] = ["type": .string("createSessionRequest"), "request": try JSONValue.from(request)]
+            if let target { o["targetDeviceId"] = .string(target) }
+            object = o
+        case .ping:
+            object = ["type": .string("ping")]
+        }
+        return String(decoding: try enc.encode(object), as: UTF8.self)
+    }
+}
+
+extension JSONValue {
+    static func from<T: Encodable>(_ value: T) throws -> JSONValue {
+        try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(value))
+    }
+}

@@ -1,0 +1,33 @@
+name: Core tests (Linux)
+
+# The pure-logic core (sync protocol, crypto, JWT, pairing, fleet model,
+# voice parsing) is tested on Linux on every push: Linux minutes are the
+# cheapest. Nothing here needs a Mac. The SwiftUI app is checked separately
+# on macOS, and only when the app changes.
+on:
+  push:
+    paths:
+      - "core/**"
+      - ".github/workflows/core-tests.yml"
+  pull_request:
+    paths:
+      - "core/**"
+  workflow_dispatch:
+
+concurrency:
+  group: core-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain version
+        run: swift --version
+      - name: Test
+        working-directory: core
+        run: |
+          set -o pipefail
+          swift test 2>&1 | tail -n 80
