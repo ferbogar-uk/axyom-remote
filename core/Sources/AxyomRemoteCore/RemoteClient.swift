@@ -34,6 +34,7 @@ public actor RemoteClient {
         public var lastError: String?
         /// Rows the phone could not decrypt (written under another key).
         public var unreadableRows = 0
+        public init() {}
     }
 
     public enum ClientError: Error, Equatable {
