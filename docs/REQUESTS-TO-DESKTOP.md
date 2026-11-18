@@ -47,8 +47,8 @@ the notification) will be done once the server message exists.
 
 Status: server side done and deployed (axyom-backend c204ac3, server 0.2.0,
 18 Nov 2026). APNs key 4TVQFVRMCH (team Z6HU7P866U) is a Worker secret; a
-smoke test proves Apple accepts it. Push Notifications capability is ticked on
-the App ID com.axyom.remote. Full contract: axyom-backend/sync/PROTOCOL.md,
+smoke test proves Apple accepts it. Ricardo was asked to tick Push Notifications
+on the App ID com.axyom.remote (not confirmed yet). Full contract: axyom-backend/sync/PROTOCOL.md,
 "Mobile push (APNs)". The desktop already asks for pushes (waiting for you,
 finished, error); nothing new is needed there.
 
