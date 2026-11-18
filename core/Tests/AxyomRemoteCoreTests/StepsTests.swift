@@ -16,16 +16,16 @@ final class StepsTests: XCTestCase {
             row(#"{"type":"assistant","message":{"content":[{"type":"text","text":"Passaram."}]}}"#),
         ]
         let lines = ChatLines.build(items, provider: "claude-code", includeSteps: true)
-        XCTAssertEqual(lines.map(\.text), ["corre os testes", "Vou correr.", "Correu: swift test", "Leu Pairing.swift", "Passaram."])
+        XCTAssertEqual(lines.map(\.text), ["corre os testes", "Vou correr.", "Correu os testes", "Leu Pairing.swift", "Passaram."])
         XCTAssertEqual(lines.map(\.isStep), [false, false, true, true, false])
         XCTAssertEqual(ChatLines.build(items, provider: "claude-code").count, 3, "steps only when asked")
     }
 
     func testCodexCommandAndFileChange() {
-        XCTAssertEqual(Steps.describe(ChatLines.json(#"{"type":"item.completed","item":{"type":"command_execution","command":"git status"}}"#)!), ["Correu: git status"])
+        XCTAssertEqual(Steps.describe(ChatLines.json(#"{"type":"item.completed","item":{"type":"command_execution","command":"git status"}}"#)!), ["Viu o estado do git"])
         XCTAssertEqual(Steps.describe(ChatLines.json(#"{"method":"item/completed","params":{"item":{"type":"fileChange","changes":[{"path":"src/a.ts"}]}}}"#)!), ["Editou a.ts"])
-        XCTAssertEqual(Steps.tool("WebSearch", .object(["query": .string("swift ui")])), "Pesquisou: swift ui")
-        XCTAssertEqual(Steps.tool("mcp__x__custom", nil), "Usou mcp__x__custom")
+        XCTAssertEqual(Steps.tool("WebSearch", .object(["query": .string("swift ui")])), "Pesquisou na web: swift ui")
+        XCTAssertEqual(Steps.tool("mcp__x__custom", nil), "Usou custom")
     }
 
     func testArchiveControl() async throws {
