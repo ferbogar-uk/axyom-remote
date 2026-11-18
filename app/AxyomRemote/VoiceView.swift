@@ -33,7 +33,7 @@ struct VoiceView: View {
                 .accessibilityLabel("Fechar")
             }
             if listener.transcript.isEmpty && listener.problem == nil {
-                Text(listener.listening ? "A ouvir…" : "Toca no microfone e diz o que queres.")
+                Text(listener.transcribing ? "A transcrever…" : listener.listening ? "A ouvir…" : "Toca no microfone e diz o que queres.")
                     .font(.body).foregroundStyle(Theme.muted)
             } else if !listener.transcript.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {

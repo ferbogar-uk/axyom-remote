@@ -185,3 +185,61 @@ Secrets AZURE_SPEECH_KEY / AZURE_SPEECH_REGION: Ricardo pastes them with the
 /voice/status says configured: false. Tests: 6 unit tests
 (`node --test test/voice.test.ts`) and the live smoke test; the real MP3 check
 runs once the key is in.
+
+## 8. Azure speech recognition for the iPhone (`/voice/stt`)
+
+Ricardo chose Azure for listening too (18 Nov 2026): better Portuguese and
+technical names than Apple's dictation. Same rules as #7 (key on the server,
+same JWT, same secrets `AZURE_SPEECH_KEY` / `AZURE_SPEECH_REGION`).
+
+The phone already sends this (azure-listen branch, build 22) and uses it only
+when `/voice/status` says `"stt": true`:
+
+    POST /voice/stt?lang=pt-BR
+    Authorization: Bearer <jwt>
+    Content-Type: audio/wav; codecs=audio/pcm; samplerate=16000
+    body: WAV, 16 kHz mono 16-bit PCM, at most 60 s (~1.9 MB)
+    → 200 { "text": "Olá, corre os testes." }   ("" when nothing was understood)
+
+Proposal for the server:
+- Forward the body to Azure short-audio recognition:
+  `https://<region>.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=<lang>&format=simple`
+  with `Ocp-Apim-Subscription-Key` and the same Content-Type. Map
+  `RecognitionStatus: "Success"` → `{ text: DisplayText }`, `NoMatch` /
+  `InitialSilenceTimeout` → `{ text: "" }`, anything else → the error codes
+  used by `/voice/tts`.
+- `lang` allowlist: `pt-BR`, `pt-PT`, `en-GB`, `en-US` (default `pt-BR`).
+- Reject bodies over 2 MB (413) or not starting with `RIFF…WAVE` (400).
+- Count seconds per user and month (WAV bytes / 32000) with a cap var, e.g.
+  `VOICE_MONTHLY_STT_SECONDS` default 18000 (5 h); 429 `monthly_cap` when over.
+  Same 30 requests a minute limit.
+- `/voice/status` gains `"stt": true` when configured, plus `usedSttSeconds`
+  and `monthlySttSeconds`.
+
+The phone gives up after 8 s and keeps Apple's live text, so a slow or
+missing endpoint never blocks a message.
+
+Status: waiting for the desktop/server session.
+
+## 9. Worktree/branch and PC file previews for the iPhone
+
+Ricardo wants each conversation short and visual (18 Nov 2026): what the
+agent is doing in one line, code hidden, and links to everything relevant,
+with thumbnails of photos and screenshots. The phone now folds steps and
+code and shows cards for links and PC paths, but two things need the desktop:
+
+1. **Worktree and branch per session.** Add to the session index entry
+   (inside the encrypted metadata, like the title): `worktreeName`
+   (e.g. "azure-listen"), `branch`, and `worktreePath`. The phone shows them
+   under the session title only when the session runs in a worktree.
+2. **Preview of PC files the agent mentions.** When the agent's reply names
+   an image or a document on the PC (a screenshot, a PNG, a PDF), the phone
+   can only show the name and copy the path today. Proposal: a sessionControl
+   `messageType: "file_preview"`, `payload: { path }`. The desktop checks the
+   path is inside the session's workspace or worktree (never elsewhere),
+   makes a small JPEG (max 800 px, first page for a PDF), encrypts it like an
+   attachment and answers in the session room with
+   `{ type: "filePreview", path, encryptedImage, iv }`. Nothing is sent unless
+   the phone asks, and only for paths the agent itself mentioned.
+
+Status: waiting for the desktop session.

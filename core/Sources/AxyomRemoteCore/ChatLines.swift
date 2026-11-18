@@ -7,9 +7,11 @@ public struct ChatLine: Equatable, Sendable, Identifiable {
     public var text: String
     /// A tool step of the agent ("Correu: git status"), shown small and grouped.
     public var isStep: Bool = false
+    /// The raw thing behind a step (the exact command, path or notice), shown only when opened.
+    public var detail: String?
 
-    public init(id: String, mine: Bool, text: String, isStep: Bool = false) {
-        self.id = id; self.mine = mine; self.text = text; self.isStep = isStep
+    public init(id: String, mine: Bool, text: String, isStep: Bool = false, detail: String? = nil) {
+        self.id = id; self.mine = mine; self.text = text; self.isStep = isStep; self.detail = detail
     }
 }
 
@@ -28,6 +30,14 @@ public enum ChatLines {
         var out: [ChatLine] = []
         for item in items where !item.hidden {
             let mine = item.direction == "input"
+            // Notices the desktop injects as input rows (a background task finished, …):
+            // one quiet step line, never a bubble full of paths and ids.
+            if mine, let notice = Notices.summary(item.raw) {
+                if includeSteps, !(out.last.map { $0.isStep && $0.text == notice } ?? false) {
+                    out.append(ChatLine(id: item.id, mine: false, text: notice, isStep: true, detail: Notices.detail(item.raw)))
+                }
+                continue
+            }
             if let text = mine ? userText(item) : agentText(item, provider: provider) {
                 let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
                 // The same text twice in a row (a final event repeating its stream) is one message.
@@ -37,8 +47,8 @@ public enum ChatLines {
             }
             // Tool steps come after the text of the same event (the agent says, then does).
             if includeSteps && !mine, let v = json(item.raw) {
-                for (i, s) in Steps.describe(v).enumerated() where !(out.last.map { $0.isStep && $0.text == s } ?? false) {
-                    out.append(ChatLine(id: "\(item.id)#\(i)", mine: false, text: s, isStep: true))
+                for (i, s) in Steps.detailed(v).enumerated() where !(out.last.map { $0.isStep && $0.text == s.text } ?? false) {
+                    out.append(ChatLine(id: "\(item.id)#\(i)", mine: false, text: s.text, isStep: true, detail: s.detail))
                 }
             }
         }

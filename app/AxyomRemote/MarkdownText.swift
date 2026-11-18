@@ -6,6 +6,8 @@ import SwiftUI
 struct MarkdownText: View {
     let text: String
     var color: Color = Theme.textSoft
+    /// Code blocks start folded ("Código · 12 linhas"); tapped ones open.
+    @State private var openCode: Set<Int> = []
 
     private enum Block: Hashable {
         case paragraph(String)
@@ -51,7 +53,7 @@ struct MarkdownText: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
+            ForEach(Array(blocks.enumerated()), id: \.offset) { index, block in
                 switch block {
                 case .paragraph(let s):
                     Text(inline(s)).font(.body).foregroundStyle(color)
@@ -63,15 +65,40 @@ struct MarkdownText: View {
                         Text(inline(s)).font(.body).foregroundStyle(color)
                     }
                 case .code(let s):
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        Text(s).font(.system(.footnote, design: .monospaced)).foregroundStyle(Theme.text)
-                            .padding(10)
-                    }
-                    .background(Theme.elevated, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    codeBlock(s, index: index)
                 }
             }
         }
         .textSelection(.enabled)
+    }
+
+    @ViewBuilder private func codeBlock(_ s: String, index: Int) -> some View {
+        let open = openCode.contains(index)
+        let lines = s.split(separator: "\n", omittingEmptySubsequences: false).count
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                if open { openCode.remove(index) } else { openCode.insert(index) }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.left.forwardslash.chevron.right").font(.caption)
+                    Text("Código · \(lines) \(lines == 1 ? "linha" : "linhas")").font(.footnote)
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.caption2.weight(.bold)).rotationEffect(.degrees(open ? 90 : 0))
+                }
+                .foregroundStyle(Theme.muted)
+                .padding(.horizontal, 12).padding(.vertical, 9)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(open ? "Esconder código" : "Mostrar código, \(lines) linhas")
+            if open {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    Text(s).font(.system(.footnote, design: .monospaced)).foregroundStyle(Theme.text)
+                        .padding(.horizontal, 12).padding(.bottom, 10)
+                }
+            }
+        }
+        .background(Theme.elevated, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private func inline(_ s: String) -> AttributedString {

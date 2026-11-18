@@ -21,8 +21,10 @@ public enum NeuralVoice {
         public let maxChars: Int
         public let usedChars: Int
         public let monthlyCharCap: Int
+        /// The server can also transcribe speech (`/voice/stt`, request #8).
+        public let stt: Bool
 
-        enum CodingKeys: String, CodingKey { case configured, defaultVoice, voices, maxChars, usedChars, monthlyCharCap }
+        enum CodingKeys: String, CodingKey { case configured, defaultVoice, voices, maxChars, usedChars, monthlyCharCap, stt }
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             configured = try c.decodeIfPresent(Bool.self, forKey: .configured) ?? false
@@ -31,10 +33,11 @@ public enum NeuralVoice {
             maxChars = try c.decodeIfPresent(Int.self, forKey: .maxChars) ?? 3000
             usedChars = try c.decodeIfPresent(Int.self, forKey: .usedChars) ?? 0
             monthlyCharCap = try c.decodeIfPresent(Int.self, forKey: .monthlyCharCap) ?? 0
+            stt = try c.decodeIfPresent(Bool.self, forKey: .stt) ?? false
         }
-        public init(configured: Bool, defaultVoice: String?, voices: [Option], maxChars: Int, usedChars: Int, monthlyCharCap: Int) {
+        public init(configured: Bool, defaultVoice: String?, voices: [Option], maxChars: Int, usedChars: Int, monthlyCharCap: Int, stt: Bool = false) {
             self.configured = configured; self.defaultVoice = defaultVoice; self.voices = voices
-            self.maxChars = maxChars; self.usedChars = usedChars; self.monthlyCharCap = monthlyCharCap
+            self.maxChars = maxChars; self.usedChars = usedChars; self.monthlyCharCap = monthlyCharCap; self.stt = stt
         }
         /// Out of this month's characters: speak with the iPhone voice instead.
         public var exhausted: Bool { monthlyCharCap > 0 && usedChars >= monthlyCharCap }
@@ -71,6 +74,44 @@ public enum NeuralVoice {
         if pct != 0 { body["rate"] = pct }
         r.httpBody = try? JSONSerialization.data(withJSONObject: body, options: [.sortedKeys])
         return r
+    }
+
+    /// Speech to text: 16 kHz mono 16-bit WAV (at most `maxSttSeconds`), language like "pt-BR".
+    public static let sttSampleRate = 16_000
+    public static let maxSttSeconds = 60
+
+    public static func sttRequest(pairing: PairingPayload, wav: Data, language: String, now: Date = Date()) -> URLRequest? {
+        var c = URLComponents(string: base(pairing) + "/voice/stt")
+        c?.queryItems = [URLQueryItem(name: "lang", value: language)]
+        guard let url = c?.url else { return nil }
+        var r = URLRequest(url: url, timeoutInterval: 20)
+        r.httpMethod = "POST"
+        r.setValue("Bearer " + token(pairing, now: now), forHTTPHeaderField: "Authorization")
+        r.setValue("audio/wav; codecs=audio/pcm; samplerate=\(sttSampleRate)", forHTTPHeaderField: "Content-Type")
+        r.httpBody = wav
+        return r
+    }
+
+    /// The server's answer to /voice/stt: `{ "text": "..." }` ("" when nothing was understood).
+    public static func sttText(_ data: Data) -> String? {
+        struct Reply: Decodable { let text: String? }
+        guard let reply = try? JSONDecoder().decode(Reply.self, from: data) else { return nil }
+        return reply.text?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// A WAV file around 16-bit little-endian mono samples.
+    public static func wav(samples: [Int16], sampleRate: Int = sttSampleRate) -> Data {
+        var d = Data()
+        func u32(_ v: UInt32) { withUnsafeBytes(of: v.littleEndian) { d.append(contentsOf: $0) } }
+        func u16(_ v: UInt16) { withUnsafeBytes(of: v.littleEndian) { d.append(contentsOf: $0) } }
+        let bytes = UInt32(samples.count * 2)
+        d.append(contentsOf: Array("RIFF".utf8)); u32(36 + bytes)
+        d.append(contentsOf: Array("WAVE".utf8))
+        d.append(contentsOf: Array("fmt ".utf8)); u32(16); u16(1); u16(1)
+        u32(UInt32(sampleRate)); u32(UInt32(sampleRate * 2)); u16(2); u16(16)
+        d.append(contentsOf: Array("data".utf8)); u32(bytes)
+        for s in samples { u16(UInt16(bitPattern: s)) }
+        return d
     }
 
     /// 1.25 → 25, 0.92 → -8; kept inside the server's -50…100.

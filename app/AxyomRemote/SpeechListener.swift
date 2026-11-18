@@ -11,10 +11,19 @@ import AxyomRemoteCore
 /// already heard is kept and the new phrase is added after it (TranscriptJoiner),
 /// and a finished task is restarted while the user is still talking, so a pause
 /// never wipes what was said.
+///
+/// With the Azure voice on and the server able to transcribe, the same
+/// microphone audio is also kept (16 kHz mono) and sent to the server when you
+/// stop; its text replaces Apple's. Apple's live text stays as the fallback.
 @MainActor
 final class SpeechListener: ObservableObject {
+    /// Sends a WAV and a language ("pt-BR") to the server, returns the text or nil. Set by AppModel.
+    static var azureSTT: ((Data, String) async -> String?)?
+
     @Published var transcript = ""
     @Published var listening = false
+    /// Microphone off, waiting for the server's transcription (listening is still true).
+    @Published var transcribing = false
     @Published var problem: String?
     /// Whether the last recognition ran on the iPhone (false = Apple's servers).
     @Published var onDevice = true
@@ -33,12 +42,15 @@ final class SpeechListener: ObservableObject {
     private var task: SFSpeechRecognitionTask?
     private var silenceTimer: Timer?
     private var autoStop = false
+    private var collector: PCMCollector?
+    private var sttTask: Task<Void, Never>?
     /// Seconds of silence after speech that end listening when auto-stop is on.
     /// 1.8 s: pauses no longer erase what was said (TranscriptJoiner keeps it),
     /// so the wait can be shorter than AVA's 2.5 s; tapping still sends at once.
     var silenceSeconds: TimeInterval { Prefs.silenceSeconds }
 
     func toggle(autoStop: Bool = false) {
+        if transcribing { return }
         if listening { stop() } else { self.autoStop = autoStop; start() }
     }
 
@@ -74,7 +86,11 @@ final class SpeechListener: ObservableObject {
             try audio.setCategory(.playAndRecord, mode: .default, options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
             try audio.setActive(true, options: .notifyOthersOnDeactivation)
             let input = engine.inputNode
-            input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { [weak self] buffer, _ in
+            let format = input.outputFormat(forBus: 0)
+            let keep = Prefs.voiceEngine == "azure" && Self.azureSTT != nil ? PCMCollector(from: format) : nil
+            collector = keep
+            input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+                keep?.append(buffer)
                 // The current request changes when a task is restarted after a pause.
                 Task { @MainActor in self?.request?.append(buffer) }
             }
@@ -124,18 +140,82 @@ final class SpeechListener: ObservableObject {
         }
     }
 
-    func stop() {
+    /// Stop listening. `discard` (leaving the conversation) skips the server transcription.
+    func stop(discard: Bool = false) {
         silenceTimer?.invalidate()
         silenceTimer = nil
-        guard listening || engine.isRunning else { return }
+        if discard, transcribing {
+            sttTask?.cancel(); sttTask = nil
+            transcribing = false
+            listening = false
+            return
+        }
+        guard !transcribing, listening || engine.isRunning else { return }
         joiner.commit()
         transcript = joiner.text
-        listening = false
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
         request?.endAudio()
         task?.cancel()
         request = nil
         task = nil
+        let samples = collector?.take() ?? []
+        collector = nil
+        // Under a quarter of a second is nothing worth sending.
+        guard !discard, let stt = Self.azureSTT, samples.count > NeuralVoice.sttSampleRate / 4 else {
+            listening = false
+            return
+        }
+        transcribing = true
+        let language = Prefs.voiceLanguage
+        sttTask = Task { [weak self] in
+            let text = await stt(NeuralVoice.wav(samples: samples), language)
+            guard let self, !Task.isCancelled else { return }
+            if let text, !text.isEmpty { self.transcript = text }
+            self.transcribing = false
+            self.listening = false
+            self.sttTask = nil
+        }
+    }
+}
+
+/// Keeps the microphone audio as 16 kHz mono 16-bit samples (up to 60 s) for
+/// the server transcription. Called on the audio thread.
+final class PCMCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var samples: [Int16] = []
+    private let converter: AVAudioConverter?
+    private let out: AVAudioFormat?
+    private let limit = NeuralVoice.sttSampleRate * NeuralVoice.maxSttSeconds
+
+    init(from input: AVAudioFormat) {
+        out = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: Double(NeuralVoice.sttSampleRate), channels: 1, interleaved: true)
+        converter = out.flatMap { AVAudioConverter(from: input, to: $0) }
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        guard let converter, let out, buffer.frameLength > 0 else { return }
+        let capacity = AVAudioFrameCount(Double(buffer.frameLength) * out.sampleRate / buffer.format.sampleRate) + 64
+        guard let converted = AVAudioPCMBuffer(pcmFormat: out, frameCapacity: capacity) else { return }
+        var fed = false
+        var error: NSError?
+        converter.convert(to: converted, error: &error) { _, status in
+            if fed { status.pointee = .noDataNow; return nil }
+            fed = true
+            status.pointee = .haveData
+            return buffer
+        }
+        guard error == nil, let data = converted.int16ChannelData else { return }
+        let n = Int(converted.frameLength)
+        lock.lock(); defer { lock.unlock() }
+        guard samples.count < limit else { return }
+        samples.append(contentsOf: UnsafeBufferPointer(start: data[0], count: min(n, limit - samples.count)))
+    }
+
+    func take() -> [Int16] {
+        lock.lock(); defer { lock.unlock() }
+        let s = samples
+        samples = []
+        return s
     }
 }

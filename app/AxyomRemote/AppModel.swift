@@ -50,9 +50,17 @@ final class AppModel: ObservableObject {
               let status = try? JSONDecoder().decode(NeuralVoice.Status.self, from: data) else {
             voiceStatus = nil
             ReplySpeaker.neural = nil
+            SpeechListener.azureSTT = nil
             return
         }
         voiceStatus = status
+        SpeechListener.azureSTT = status.configured && status.stt ? { wav, language in
+            guard var request = NeuralVoice.sttRequest(pairing: pairing, wav: wav, language: language) else { return nil }
+            request.timeoutInterval = 8      // a slow answer falls back to Apple's text
+            guard let (data, response) = try? await URLSession.shared.data(for: request),
+                  (response as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            return NeuralVoice.sttText(data)
+        } : nil
         guard status.configured, !status.exhausted else { ReplySpeaker.neural = nil; return }
         ReplySpeaker.neural = { text in
             let voice = Prefs.azureVoice
@@ -113,6 +121,7 @@ final class AppModel: ObservableObject {
         PairingKeychain.delete()
         cache.clear()
         ReplySpeaker.neural = nil
+        SpeechListener.azureSTT = nil
         voiceStatus = nil
         pairing = nil
         snapshot = RemoteClient.Snapshot()
