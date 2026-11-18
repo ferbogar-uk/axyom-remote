@@ -66,6 +66,11 @@ func eventually(_ timeout: Double = 3, _ check: @escaping () async -> Bool) asyn
     return false
 }
 
+func assertEventually(_ timeout: Double = 3, file: StaticString = #filePath, line: UInt = #line, _ check: @escaping () async -> Bool) async {
+    let ok = await eventually(timeout, check)
+    XCTAssertTrue(ok, "condition not met in time", file: file, line: line)
+}
+
 final class RemoteClientTests: XCTestCase {
     let pairing = PairingPayload(server: "https://sync.example", key: "personal-key", seed: "seed", issuedAt: 0)
     let phone = DeviceInfo(deviceId: "phone1", name: "iPhone", type: "mobile", platform: "ios", connectedAt: 0, lastActiveAt: 0)
@@ -89,7 +94,7 @@ final class RemoteClientTests: XCTestCase {
         let box = SocketBox()
         let client = makeClient(box, crypto: crypto)
         await client.start()
-        XCTAssertTrue(await eventually { box.sockets.first?.sentTypes == ["deviceAnnounce", "indexSyncRequest"] })
+        await assertEventually { box.sockets.first?.sentTypes == ["deviceAnnounce", "indexSyncRequest"] }
 
         let index = box.sockets[0]
         XCTAssertTrue(index.url.absoluteString.hasPrefix("wss://sync.example/sync/org%3Aaxyom%3Auser%3Aowner%3Aindex?token="))
@@ -98,14 +103,14 @@ final class RemoteClientTests: XCTestCase {
 
         index.push(#"{"type":"indexSyncResponse","sessions":[\#(try entry(crypto, id: "s1", title: "Refactor", project: "/p/AXYOM", executing: true))],"projects":[]}"#)
         index.push(#"{"type":"devicesList","devices":[{"deviceId":"pc1","name":"Home Laptop","type":"desktop","platform":"windows","connectedAt":0,"lastActiveAt":0},{"deviceId":"phone1","name":"iPhone","type":"mobile","platform":"ios","connectedAt":0,"lastActiveAt":0}]}"#)
-        XCTAssertTrue(await eventually { let s = await client.currentSnapshot(); return s.connected && s.sessions.count == 1 && s.devices.count == 1 })
+        await assertEventually { let s = await client.currentSnapshot(); return s.connected && s.sessions.count == 1 && s.devices.count == 1 }
         let snap = await client.currentSnapshot()
         XCTAssertEqual(snap.sessions.first?.title, "Refactor")
         XCTAssertEqual(snap.devices.first?.name, "Home Laptop", "the phone does not list itself")
 
         index.push(#"{"type":"indexDeleteBroadcast","sessionId":"s1"}"#)
         index.push(#"{"type":"deviceLeft","deviceId":"pc1"}"#)
-        XCTAssertTrue(await eventually { let s = await client.currentSnapshot(); return s.sessions.isEmpty && s.devices.isEmpty })
+        await assertEventually { let s = await client.currentSnapshot(); return s.sessions.isEmpty && s.devices.isEmpty }
         await client.stop()
     }
 
@@ -115,9 +120,9 @@ final class RemoteClientTests: XCTestCase {
         let box = SocketBox()
         let client = makeClient(box, crypto: mine)
         await client.start()
-        XCTAssertTrue(await eventually { !box.sockets.isEmpty })
+        await assertEventually { !box.sockets.isEmpty }
         box.sockets[0].push(#"{"type":"indexSyncResponse","sessions":[\#(try entry(other, id: "x", title: "t", project: "/p"))],"projects":[]}"#)
-        XCTAssertTrue(await eventually { await client.currentSnapshot().unreadableRows == 1 })
+        await assertEventually { await client.currentSnapshot().unreadableRows == 1 }
         await client.stop()
     }
 
@@ -126,10 +131,10 @@ final class RemoteClientTests: XCTestCase {
         let box = SocketBox()
         let client = makeClient(box, crypto: crypto)
         await client.start()
-        XCTAssertTrue(await eventually { box.sockets.count == 1 && box.sockets[0].sentTypes.count == 2 })
+        await assertEventually { box.sockets.count == 1 && box.sockets[0].sentTypes.count == 2 }
         box.sockets[0].close()
-        XCTAssertTrue(await eventually { box.sockets.count == 2 && box.sockets[1].sentTypes.count == 2 })
-        XCTAssertTrue(await eventually { await client.currentSnapshot().connected })
+        await assertEventually { box.sockets.count == 2 && box.sockets[1].sentTypes.count == 2 }
+        await assertEventually { await client.currentSnapshot().connected }
         await client.stop()
     }
 
@@ -147,7 +152,7 @@ final class RemoteClientTests: XCTestCase {
         }
         let client = makeClient(box, crypto: crypto)
         await client.start()
-        XCTAssertTrue(await eventually { await client.currentSnapshot().connected })
+        await assertEventually { await client.currentSnapshot().connected }
         let id = try await client.createSession(projectId: "/p/AXYOM", provider: "openai-codex", prompt: "review the PR", targetDeviceId: "pc1")
         XCTAssertEqual(id, "new-1")
 
@@ -165,7 +170,7 @@ final class RemoteClientTests: XCTestCase {
         let box = SocketBox()
         let client = makeClient(box, crypto: crypto)
         await client.start()
-        XCTAssertTrue(await eventually { await client.currentSnapshot().connected })
+        await assertEventually { await client.currentSnapshot().connected }
         do {
             _ = try await client.createSession(projectId: "/p", provider: nil, prompt: nil, targetDeviceId: nil, timeout: 0.01)
             XCTFail("expected timeout")
