@@ -49,4 +49,25 @@ final class NeuralVoiceTests: XCTestCase {
         let long = String(repeating: "palavra ", count: 600)   // one 4800-char "sentence"
         XCTAssertTrue(NeuralVoice.chunks(long).allSatisfy { $0.count <= 3000 })
     }
+
+    func testSttRequestAndWav() throws {
+        let wav = NeuralVoice.wav(samples: [0, 1, -1, 32767])
+        XCTAssertEqual(wav.count, 44 + 8)
+        XCTAssertEqual(String(data: wav.prefix(4), encoding: .ascii), "RIFF")
+        XCTAssertEqual(String(data: wav.subdata(in: 8..<12), encoding: .ascii), "WAVE")
+        XCTAssertEqual(Array(wav.subdata(in: 24..<28)), [0x80, 0x3E, 0, 0])   // 16000 Hz
+        XCTAssertEqual(Array(wav.suffix(8)), [0, 0, 1, 0, 0xFF, 0xFF, 0xFF, 0x7F])
+
+        let r = try XCTUnwrap(NeuralVoice.sttRequest(pairing: pairing, wav: wav, language: "pt-BR"))
+        XCTAssertEqual(r.url?.absoluteString, "https://sync.example/voice/stt?lang=pt-BR")
+        XCTAssertEqual(r.httpMethod, "POST")
+        XCTAssertTrue(r.value(forHTTPHeaderField: "Content-Type")?.contains("samplerate=16000") == true)
+        XCTAssertEqual(r.httpBody, wav)
+
+        XCTAssertEqual(NeuralVoice.sttText(Data(#"{"text":" Olá mundo. "}"#.utf8)), "Olá mundo.")
+        XCTAssertEqual(NeuralVoice.sttText(Data(#"{"text":""}"#.utf8)), "")
+        XCTAssertNil(NeuralVoice.sttText(Data("x".utf8)))
+        let s = try JSONDecoder().decode(NeuralVoice.Status.self, from: Data(#"{"configured":true,"stt":true}"#.utf8))
+        XCTAssertTrue(s.stt)
+    }
 }

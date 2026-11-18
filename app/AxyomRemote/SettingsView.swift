@@ -36,7 +36,7 @@ struct SettingsView: View {
         let used = s.usedChars.formatted(.number.locale(Locale(identifier: "pt_PT")))
         let cap = s.monthlyCharCap.formatted(.number.locale(Locale(identifier: "pt_PT")))
         return s.exhausted ? "Voz neural: limite do mês atingido (\(used) de \(cap) caracteres), uso a voz do iPhone."
-                           : "Voz neural Azure: \(used) de \(cap) caracteres usados este mês. Se falhar, a app usa a voz do iPhone."
+                           : "Voz neural Azure: \(used) de \(cap) caracteres usados este mês. Se falhar, a app usa a voz do iPhone. " + (s.stt ? "Ouvir: Azure transcreve o que dizes." : "Ouvir: ditado do iPhone (o servidor ainda não transcreve).")
     }
     @AppStorage(Prefs.Key.haptics) private var haptics = true
     @AppStorage(Prefs.Key.notifications) private var notifications = true

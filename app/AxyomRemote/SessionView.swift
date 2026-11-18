@@ -291,7 +291,7 @@ struct SessionView: View {
     private func endConversation() {
         conversation = false
         phase = .idle
-        listener.stop()
+        listener.stop(discard: true)
         voice.stop()
     }
 
@@ -324,7 +324,7 @@ struct SessionView: View {
             VStack(alignment: .leading, spacing: 10) {
                 AttachmentTray(images: $images)
                 if listener.listening && !conversation {
-                    Text(listener.transcript.isEmpty ? "A ouvir…" : "“\(listener.transcript)”")
+                    Text(listener.transcribing ? "A transcrever…" : listener.transcript.isEmpty ? "A ouvir…" : "“\(listener.transcript)”")
                         .font(.body).foregroundStyle(Theme.textSoft).lineLimit(4)
                 }
                 TextField("Responder ao agente…", text: $draft, axis: .vertical)
