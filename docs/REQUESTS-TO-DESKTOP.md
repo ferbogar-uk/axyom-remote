@@ -45,6 +45,33 @@ Needed for real push:
 The iPhone side (token registration, Push capability, opening the session from
 the notification) will be done once the server message exists.
 
+Status: server side done and deployed (axyom-backend c204ac3, server 0.2.0,
+18 Nov 2026). APNs key 4TVQFVRMCH (team Z6HU7P866U) is a Worker secret; a
+smoke test proves Apple accepts it. Push Notifications capability is ticked on
+the App ID com.axyom.remote. Full contract: axyom-backend/sync/PROTOCOL.md,
+"Mobile push (APNs)". The desktop already asks for pushes (waiting for you,
+finished, error); nothing new is needed there.
+
+What the iPhone app must do now:
+1. Entitlement `aps-environment` (production for TestFlight) and the Push
+   Notifications capability in project.yml.
+2. Ask notification permission (alert, sound, badge), then
+   `registerForRemoteNotifications()`.
+3. On the device token (hex, lowercase), send on the index room after
+   `deviceAnnounce`, on every connect (tokens can change):
+   `{ "type": "registerPushToken", "deviceId": <same id as deviceAnnounce>,
+   "platform": "ios", "token": "<hex>" }` (add `"environment": "development"`
+   only for an Xcode/debug build). Expect `registerPushTokenResult`
+   `{ ok: true, pushConfigured: true }`.
+4. When the user turns notifications off in the app: `unregisterPushToken
+   { deviceId }`.
+5. Tapping a notification: payload has top-level `sessionId`; open that
+   session. Text is generic Portuguese ("Uma sessão está à tua espera" etc.);
+   the app can show the decrypted title once open.
+6. Keep sending something (ping) while in the foreground: the server treats a
+   phone as present (and does not push it) only if it spoke in the last 60 s.
+Not tested on a real phone yet: needs a TestFlight build with steps 1 to 3.
+
 ## 3. Plan usage / progress on the iPhone
 
 Status: delivered by the desktop (planUsageBroadcast, HANDOFF 6a); the phone
