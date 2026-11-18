@@ -112,3 +112,17 @@ Proposal: a sessionControl `messageType: "remove_queued"` with
 `pending`, publishes the queue state again (so the phone's tray updates), and
 ignores it if the prompt already started. The phone will show "Anular" next to
 each queued prompt once this exists.
+
+Status: done on the desktop (axyom-redesign-backup d08b509, 18 Nov 2026).
+Send it exactly as proposed: sessionControl `remove_queued`, `payload:
+{ promptId }` (the queued prompt's id, max 200 chars). What the desktop does:
+- still `pending` → the row becomes `failed` with "Removed from AXYOM Remote
+  before it started" (rows are never deleted, so a late replay of the phone's
+  queue cannot bring it back), then the queue is published again without it;
+- already started → nothing changes, but the queue is published again so
+  the tray shows the truth;
+- not on the desktop yet (the control beat the queue sync) → the id is
+  remembered and skipped when it arrives (memory only, lost if AXYOM restarts);
+- a prompt from another session → ignored.
+There is no reply message: the phone learns the result from the next
+`queuedPrompts` publish. Not tested with a real phone yet.
