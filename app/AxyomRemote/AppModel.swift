@@ -18,6 +18,7 @@ final class AppModel: ObservableObject {
     /// Images you sent, by session and message text, to show as thumbnails (this run of the app).
     var sentImages: [String: [Data]] = [:]
     private var attention = AttentionWatcher()
+    private var finishes = FinishWatcher()
 
     init() {
         if let saved = PairingKeychain.load() { connect(saved) }
@@ -68,6 +69,18 @@ final class AppModel: ObservableObject {
     private func apply(_ snap: RemoteClient.Snapshot) {
         snapshot = snap
         for s in attention.update(snap.sessions) { notifyWaiting(s) }
+        for s in finishes.update(snap.sessions) { notifyFinished(s) }
+    }
+
+    /// Local notification when an agent finishes its turn (same limits as the waiting one).
+    private func notifyFinished(_ s: FleetSession) {
+        guard Prefs.notifyFinished, UIApplication.shared.applicationState != .active else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "\(ProviderName.display(s.provider)) terminou"
+        content.body = "\(s.title) · \(s.projectName)"
+        content.sound = .default
+        content.userInfo = ["sessionId": s.id]
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "done-\(s.id)-\(Int(Date().timeIntervalSince1970))", content: content, trigger: nil))
     }
 
     /// Local notification when a session starts waiting for you. It only fires

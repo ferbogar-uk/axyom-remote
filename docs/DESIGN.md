@@ -160,3 +160,12 @@ Update (2026-11-18, 15:30), autonomous batch 3:
   its text back in the box to edit.
 - Thumbnails of the images you sent appear above your message (kept in memory
   while the app runs; the transcript itself does not carry them back).
+
+Update (2026-11-18, 15:45), autonomous batch 4:
+- "Agente terminou" notice when a session goes from working to idle (not when
+  it stops to wait for you, which has its own notice); switch in Settings.
+  Same limit as the other local notices: only while the app is running.
+- Archived sessions: "Arquivadas · N" at the end of home opens the list with
+  "Desarquivar" (sessionControl archive with isArchived false).
+- Tap the plan usage strip: detail per plan with each window (5 h, week…), %,
+  and when it renews.

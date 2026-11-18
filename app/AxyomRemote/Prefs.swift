@@ -11,6 +11,7 @@ enum Prefs {
         static let silence = "silenceSeconds"         // 1.5 | 2.0 | 2.5
         static let haptics = "haptics"
         static let notifications = "notifications"
+        static let notifyFinished = "notifyFinished"
     }
 
     private static var d: UserDefaults { .standard }
@@ -29,6 +30,7 @@ enum Prefs {
     }
     static var haptics: Bool { d.object(forKey: Key.haptics) as? Bool ?? true }
     static var notifications: Bool { d.object(forKey: Key.notifications) as? Bool ?? true }
+    static var notifyFinished: Bool { d.object(forKey: Key.notifyFinished) as? Bool ?? true }
 
     static func colorScheme(_ raw: String) -> ColorScheme? {
         switch raw {

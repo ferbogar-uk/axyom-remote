@@ -21,13 +21,15 @@ struct ComandoView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     header
                     statusBanner
-                    PlanUsageStrip(usage: model.snapshot.planUsage)
+                    NavigationLink(value: "screen:usage") { PlanUsageStrip(usage: model.snapshot.planUsage) }
+                        .buttonStyle(.plain)
                     projectChips(board)
                     searchField
                     if !board.waiting.isEmpty { waitingSection(board.waiting) }
                     if !board.working.isEmpty { workingSection(board.working) }
                     if !board.recent.isEmpty { recentSection(board.recent) }
                     if board.waiting.isEmpty && board.working.isEmpty && board.recent.isEmpty { emptyState }
+                    archivedLink
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
@@ -35,7 +37,11 @@ struct ComandoView: View {
             .scrollIndicators(.hidden)
             .refreshable { try? await model.client?.refreshIndex() }
             .navigationDestination(for: String.self) { id in
-                SessionView(sessionId: id.hasPrefix("talk:") ? String(id.dropFirst(5)) : id, startTalking: id.hasPrefix("talk:"))
+                switch id {
+                case "screen:usage": PlanUsageDetailView()
+                case "screen:archived": ArchivedView()
+                default: SessionView(sessionId: id.hasPrefix("talk:") ? String(id.dropFirst(5)) : id, startTalking: id.hasPrefix("talk:"))
+                }
             }
             .safeAreaInset(edge: .bottom) { bottomBar }
             .toolbar(.hidden, for: .navigationBar)
@@ -191,6 +197,23 @@ struct ComandoView: View {
                 .font(.subheadline).foregroundStyle(Theme.muted)
         }
         .card()
+    }
+
+    @ViewBuilder private var archivedLink: some View {
+        let count = model.snapshot.sessions.filter(\.isArchived).count
+        if count > 0 {
+            NavigationLink(value: "screen:archived") {
+                HStack(spacing: 10) {
+                    Image(systemName: "archivebox").foregroundStyle(Theme.muted)
+                    Text("Arquivadas · \(count)").font(.subheadline).foregroundStyle(Theme.text)
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Theme.muted)
+                }
+                .padding(.horizontal, 14).frame(minHeight: 48)
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     /// Voice button: open the session that is waiting for you (else the latest)

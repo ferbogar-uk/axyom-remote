@@ -16,6 +16,7 @@ struct SettingsView: View {
     @AppStorage(Prefs.Key.silence) private var silence = 1.8
     @AppStorage(Prefs.Key.haptics) private var haptics = true
     @AppStorage(Prefs.Key.notifications) private var notifications = true
+    @AppStorage(Prefs.Key.notifyFinished) private var notifyFinished = true
 
     private var desktops: [DeviceInfo] { model.snapshot.devices.filter { $0.type == "desktop" } }
 
@@ -84,6 +85,7 @@ struct SettingsView: View {
 
                 Section {
                     toggleRow("bell", "Avisar quando um agente espera por ti", isOn: $notifications)
+                    toggleRow("checkmark.circle", "Avisar quando um agente termina", isOn: $notifyFinished)
                     toggleRow("hand.tap", "Vibração ao enviar", isOn: $haptics)
                     Button {
                         if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }

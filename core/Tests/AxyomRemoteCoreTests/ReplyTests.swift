@@ -156,4 +156,17 @@ final class ReplyTests: XCTestCase {
         XCTAssertEqual(lines.count, 2)
         XCTAssertEqual(lines.last?.count, 601)
     }
+
+    func testFinishWatcherFiresWhenWorkStops() {
+        func s(_ id: String, working: Bool, waiting: Bool = false) -> FleetSession {
+            FleetSession(id: id, title: id, projectId: "/p", provider: "claude-code", isExecuting: working, hasPendingPrompt: waiting, lastActivity: Date(timeIntervalSince1970: 0))
+        }
+        var w = FinishWatcher()
+        XCTAssertTrue(w.update([s("a", working: true)]).isEmpty, "first call only learns")
+        XCTAssertTrue(w.update([s("a", working: true)]).isEmpty)
+        XCTAssertEqual(w.update([s("a", working: false)]).map(\.id), ["a"])
+        XCTAssertTrue(w.update([s("a", working: false)]).isEmpty)
+        _ = w.update([s("b", working: true)])
+        XCTAssertTrue(w.update([s("b", working: false, waiting: true)]).isEmpty, "waiting for you is the other notice")
+    }
 }
