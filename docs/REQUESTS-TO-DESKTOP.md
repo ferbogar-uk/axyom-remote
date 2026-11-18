@@ -56,3 +56,27 @@ publishes an encrypted `usage` blob in the index room (like encryptedClientMetad
 e.g. `{ providers: [{ id, label, usedPct, resetsAt, window: "5h"|"week" }], updatedAt }`,
 refreshed when it changes. The phone decrypts and shows it. Until then the app
 shows no usage rather than an invented number.
+## 4. Change model and effort from the iPhone
+
+Ricardo wants to switch model and effort per session from the phone (chip in
+the composer, like the Claude app). The wire already carries it:
+`IndexEncryptedQueuedPrompt.options = { mode?, model?, effortLevel? }`, and the
+desktop-to-desktop mirror (RemoteSessionMirror.ts) sends it. But the mobile
+ingest (`mobileQueuedPromptIngest.ts`) drops `options`: the prompt runs with the
+session's current model/effort.
+
+Needed: in `ingestQueuedPrompts`, pass `prompt.options` through to the queued
+row and, when the prompt runs, apply `model` / `effortLevel` / `mode` to the
+session (same as choosing them in the desktop composer), then publish the new
+`model` on the index entry. Also publish the session's `effortLevel` somewhere
+the phone can read (e.g. in encryptedClientMetadata) so the chip shows it.
+The phone will send `options` and enable the picker once this lands; until then
+the chip only shows the current model and says it cannot switch yet.
+
+## 5. Gemini (Antigravity) shell commands time out on Windows
+
+Seen 18 Nov 2026: asked "what day is today", Gemini ran `date`, which on Windows
+cmd waits for a new date to be typed, so the command hung until its timeout and
+the reply took very long. Suggest: on Windows, tell the agent (system prompt /
+tool hint) that `date` and `time` are interactive and to use `date /t`,
+`Get-Date` or the date already in its context. Not an iPhone issue.

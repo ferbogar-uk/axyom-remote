@@ -78,18 +78,21 @@ struct SessionView: View {
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    if conversation { endConversation() } else { startConversation() }
-                } label: {
-                    Image(systemName: conversation ? "waveform.circle.fill" : "waveform.circle")
-                        .foregroundStyle(conversation ? Theme.amber : Theme.text)
+                Button { Task { await stop() } } label: {
+                    Image(systemName: "stop.circle").foregroundStyle(session?.isExecuting == true ? Theme.danger : Theme.muted)
                 }
-                .accessibilityLabel(conversation ? "Desligar conversa por voz" : "Ligar conversa por voz")
+                .disabled(!online || busyId != nil || session?.isExecuting != true)
+                .accessibilityLabel("Parar o agente")
             }
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Parar") { Task { await stop() } }
-                    .tint(Theme.danger)
-                    .disabled(!online || busyId != nil)
+                Menu {
+                    Button { Task { await fullLoad() } } label: { Label("Atualizar conversa", systemImage: "arrow.clockwise") }
+                    Button { startConversation() } label: { Label("Conversa por voz", systemImage: "waveform") }
+                    Button(role: .destructive) { Task { await stop() } } label: { Label("Parar o agente", systemImage: "stop.circle") }
+                } label: {
+                    Image(systemName: "ellipsis").foregroundStyle(Theme.text).frame(width: 32, height: 32)
+                }
+                .accessibilityLabel("Mais opções")
             }
         }
         .task { await fullLoad() }
@@ -105,7 +108,8 @@ struct SessionView: View {
                 waitStarted = Date()
                 Task { await send(heard, source: "voice") }
             } else if !heard.isEmpty {
-                draft = heard
+                let current = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                draft = current.isEmpty ? heard : current + " " + heard
             }
         }
         // Reply finished being read aloud: open the microphone again.
@@ -189,59 +193,92 @@ struct SessionView: View {
 
     // MARK: Composer
 
+    /// Floating composer, like the Claude app: text on top; attach, model, dictate
+    /// and the orange action at the bottom. The orange button starts a voice
+    /// conversation while the box is empty and becomes "send" once you type.
     private var composer: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if conversation {
-                Text(listener.listening ? "A ouvir… paro sozinho quando te calares." : "Conversa por voz ligada: falas, envio sozinho e leio a resposta em voz alta.")
-                    .font(.caption).foregroundStyle(Theme.muted)
-            }
-            if let problem = listener.problem { Text(problem).font(.caption).foregroundStyle(Theme.danger) }
-            if listener.listening && !listener.transcript.isEmpty {
-                Text("“\(listener.transcript)”").font(.footnote).foregroundStyle(Theme.textSoft).lineLimit(3)
-            }
-            AttachmentTray(images: $images)
-            HStack(alignment: .bottom, spacing: 8) {
-                Menu {
-                    Button { showPhotos = true } label: { Label("Escolher fotografias", systemImage: "photo.on.rectangle") }
-                    Button { showCamera = true } label: { Label("Tirar foto", systemImage: "camera") }
-                } label: {
-                    Image(systemName: "plus").font(.title3.weight(.semibold)).frame(width: 44, height: 48)
-                        .foregroundStyle(Theme.text)
+            if let problem = listener.problem { Text(problem).font(.caption).foregroundStyle(Theme.danger).padding(.horizontal, 8) }
+            if !online { Text("O PC está offline: a resposta fica guardada e corre quando ele ligar.").font(.caption).foregroundStyle(Theme.muted).padding(.horizontal, 8) }
+            VStack(alignment: .leading, spacing: 10) {
+                AttachmentTray(images: $images)
+                if listener.listening && !conversation {
+                    Text(listener.transcript.isEmpty ? "A ouvir…" : "“\(listener.transcript)”")
+                        .font(.body).foregroundStyle(Theme.textSoft).lineLimit(4)
                 }
-                .accessibilityLabel("Anexar imagem")
                 TextField("Responder ao agente…", text: $draft, axis: .vertical)
-                    .lineLimit(1...5)
+                    .lineLimit(1...6)
                     .focused($typing)
+                    .font(.body)
                     .foregroundStyle(Theme.text)
-                    .padding(.horizontal, 14).padding(.vertical, 12)
-                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.borderStrong, lineWidth: 1))
-                Button {
-                    voice.stop()
-                    listener.toggle(autoStop: conversation)
-                } label: {
-                    Image(systemName: listener.listening ? "stop.fill" : "mic.fill")
-                        .font(.title3).frame(width: 48, height: 48)
-                        .foregroundStyle(listener.listening ? Theme.onAmber : Theme.text)
-                        .background(listener.listening ? Theme.amber : Theme.surface, in: Circle())
-                        .overlay(Circle().stroke(Theme.borderStrong, lineWidth: listener.listening ? 0 : 1))
+                    .padding(.horizontal, 4)
+                HStack(spacing: 10) {
+                    Menu {
+                        Button { showPhotos = true } label: { Label("Escolher fotografias", systemImage: "photo.on.rectangle") }
+                        Button { showCamera = true } label: { Label("Tirar foto", systemImage: "camera") }
+                    } label: {
+                        Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(Theme.text)
+                            .frame(width: 40, height: 40).background(Theme.elevated, in: Circle())
+                    }
+                    .accessibilityLabel("Anexar imagem")
+                    modelChip
+                    Spacer(minLength: 0)
+                    Button {
+                        voice.stop()
+                        listener.toggle(autoStop: false)
+                    } label: {
+                        Image(systemName: listener.listening && !conversation ? "stop.fill" : "mic")
+                            .font(.body.weight(.semibold)).foregroundStyle(Theme.text)
+                            .frame(width: 40, height: 40).background(Theme.elevated, in: Circle())
+                    }
+                    .accessibilityLabel(listener.listening ? "Parar o ditado" : "Ditar")
+                    actionButton
                 }
-                .accessibilityLabel(listener.listening ? "Parar de ouvir" : "Falar")
-                Button {
-                    let text = draft
-                    Task { await send(text, source: "keyboard", images: images) }
-                } label: {
-                    Image(systemName: "arrow.up").font(.title3.weight(.semibold)).frame(width: 48, height: 48)
-                        .foregroundStyle(canSend ? Theme.onAmber : Theme.muted)
-                        .background(canSend ? Theme.amber : Theme.border, in: Circle())
-                }
-                .disabled(!canSend)
-                .accessibilityLabel("Enviar")
             }
-            if !online { Text("O PC está offline: a resposta fica guardada e corre quando ele ligar.").font(.caption).foregroundStyle(Theme.muted) }
+            .padding(14)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Theme.border, lineWidth: 1))
+            .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
         }
-        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 8)
-        .background(Theme.background)
+        .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 6)
+    }
+
+    private var hasContent: Bool {
+        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty
+    }
+
+    /// Orange: waveform (start voice conversation) when empty, arrow (send) when there is something to send.
+    private var actionButton: some View {
+        Button {
+            if hasContent {
+                let text = draft
+                Task { await send(text, source: "keyboard", images: images) }
+            } else {
+                startConversation()
+            }
+        } label: {
+            Image(systemName: hasContent ? "arrow.up" : "waveform")
+                .font(.body.weight(.bold)).foregroundStyle(Theme.onAccent)
+                .frame(width: 44, height: 44).background(Theme.accent, in: Circle())
+                .opacity(hasContent && !canSend ? 0.45 : 1)
+        }
+        .disabled(hasContent ? !canSend : !model.snapshot.connected)
+        .accessibilityLabel(hasContent ? "Enviar" : "Começar conversa por voz")
+    }
+
+    /// The session's model as the PC reports it. Switching model or effort from
+    /// the phone needs the desktop to honour it (REQUESTS-TO-DESKTOP #4), so the
+    /// chip says so instead of pretending.
+    private var modelChip: some View {
+        Button {
+            notice = "Trocar de modelo e esforço no iPhone fica disponível quando o PC aceitar o pedido (#4). Por agora muda no PC."
+        } label: {
+            Text(ModelName.display(session?.model, provider: session?.provider))
+                .font(.subheadline).foregroundStyle(Theme.textSoft).lineLimit(1)
+                .padding(.horizontal, 12).frame(height: 36)
+                .background(Theme.elevated, in: Capsule())
+        }
+        .accessibilityLabel("Modelo da sessão")
     }
 
     private var canSend: Bool {

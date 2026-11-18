@@ -93,3 +93,15 @@ Update (2026-11-18, morning): completed from the cloud session.
 - Voice: replies are read in pt-BR; the loop reopens the mic only after the last
   sentence has been read (the old check could leave it stuck).
 All covered by Linux core tests where it is logic; none of it tested on a device yet.
+
+Update (2026-11-18, 11:00): look matched to the desktop and the Claude app, as Ricardo asked.
+- Light and dark themes following the iPhone setting: near-black / greys in
+  dark, white / light grey / ice in light. Orange only on the two actions:
+  send and start voice.
+- Session screen: floating composer (text on top; + attach, model chip,
+  dictate, orange action at the bottom). The orange button starts a voice
+  conversation when the box is empty and turns into "send" once you type.
+- Function icons at the top, outside the conversation: stop and a "..." menu
+  (refresh, voice conversation, stop).
+- Home: floating bar with "Nova sessão em…" (neutral) and the orange voice button.
+- Model chip shows the session's model; switching needs desktop request #4.

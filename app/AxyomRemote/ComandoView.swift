@@ -110,7 +110,7 @@ struct ComandoView: View {
 
     private func waitingSection(_ sessions: [FleetSession]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("À espera de ti · \(sessions.count)").sectionLabel(Theme.amber)
+            Text("À espera de ti · \(sessions.count)").sectionLabel(Theme.text)
             ForEach(sessions) { s in
                 NavigationLink(value: s.id) {
                     VStack(alignment: .leading, spacing: 6) {
@@ -183,21 +183,31 @@ struct ComandoView: View {
         .card()
     }
 
+    /// Floating bar like the session composer: neutral "new session", orange voice.
     private var bottomBar: some View {
         HStack(spacing: 10) {
-            Button("+ Nova sessão em…") { showNew = true }
-                .buttonStyle(PrimaryButtonStyle())
-                .disabled(!pcOnline)
+            Button { showNew = true } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.and.pencil")
+                    Text("Nova sessão em…")
+                }
+                .font(.headline).foregroundStyle(pcOnline ? Theme.text : Theme.muted)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Theme.elevated, in: Capsule())
+            }
+            .disabled(!pcOnline)
             Button { showVoice = true } label: {
-                Image(systemName: "mic").font(.title3).frame(width: 52, height: 52)
-                    .foregroundStyle(pcOnline ? Theme.text : Theme.muted)
-                    .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.borderStrong, lineWidth: 1))
+                Image(systemName: "waveform").font(.title3.weight(.bold)).foregroundStyle(Theme.onAccent)
+                    .frame(width: 48, height: 48).background(Theme.accent, in: Circle())
+                    .opacity(pcOnline ? 1 : 0.45)
             }
             .disabled(!pcOnline)
             .accessibilityLabel("Falar com o AXYOM")
         }
-        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 8)
-        .background(Theme.background)
+        .padding(10)
+        .background(Theme.surface, in: Capsule())
+        .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
+        .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+        .padding(.horizontal, 12).padding(.bottom, 6)
     }
 }

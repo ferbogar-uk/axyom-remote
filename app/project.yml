@@ -53,8 +53,6 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
-        # The approved design is dark only.
-        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
         CODE_SIGN_STYLE: Automatic
         # Signing team is chosen in Xcode / CI secrets. Never commit one here.
         DEVELOPMENT_TEAM: ""

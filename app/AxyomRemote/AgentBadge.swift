@@ -81,3 +81,17 @@ struct PlanUsageStrip: View {
         return hours < 48 ? "em \(hours) h" : "em \(hours / 24) dias"
     }
 }
+
+/// "claude-code:opus" -> "Opus", "gemini-2.5-flash" -> "Gemini 2.5 Flash".
+enum ModelName {
+    static func display(_ model: String?, provider: String?) -> String {
+        guard var m = model, !m.isEmpty else { return provider.map { ProviderName.display($0) } ?? "Modelo" }
+        if let colon = m.lastIndex(of: ":") { m = String(m[m.index(after: colon)...]) }
+        let words = m.replacingOccurrences(of: "-", with: " ").replacingOccurrences(of: "_", with: " ")
+            .split(separator: " ").map { w -> String in
+                let s = String(w)
+                return s.first?.isNumber == true ? s : s.prefix(1).uppercased() + s.dropFirst()
+            }
+        return words.joined(separator: " ")
+    }
+}

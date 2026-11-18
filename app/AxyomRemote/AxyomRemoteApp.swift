@@ -8,7 +8,6 @@ struct AxyomRemoteApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(model)
-                .preferredColorScheme(.dark)
         }
     }
 }

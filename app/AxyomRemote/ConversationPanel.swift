@@ -50,14 +50,14 @@ struct ConversationPanel: View {
             Text(title).font(.title2.weight(.semibold)).foregroundStyle(Theme.text)
             Button(action: onTapMain) {
                 ZStack {
-                    Circle().fill(phase == .listening ? Theme.amber : Theme.elevated)
+                    Circle().fill(phase == .listening ? Theme.accent : Theme.elevated)
                         .frame(width: 168, height: 168)
-                        .overlay(Circle().stroke(phase == .speaking ? Theme.green : Theme.amber, lineWidth: 3))
+                        .overlay(Circle().stroke(phase == .speaking ? Theme.green : Theme.accent, lineWidth: 3))
                     if phase == .waiting {
-                        ProgressView().tint(Theme.amber).scaleEffect(1.8)
+                        ProgressView().tint(Theme.accent).scaleEffect(1.8)
                     } else {
                         Image(systemName: icon).font(.system(size: 54, weight: .semibold))
-                            .foregroundStyle(phase == .listening ? Theme.onAmber : Theme.text)
+                            .foregroundStyle(phase == .listening ? Theme.onAccent : Theme.text)
                     }
                 }
             }
