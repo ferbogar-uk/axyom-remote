@@ -83,7 +83,7 @@ struct NewSessionSheet: View {
                 projectId: projectId,
                 provider: agent.providerId,
                 prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
-                targetDeviceId: model.desktopDeviceId
+                targetDeviceId: model.desktopId(forEncryptedProjectId: board.projects.first(where: { $0.id == projectId })?.encryptedId)
             )
             dismiss()
         } catch RemoteClient.ClientError.timeout {

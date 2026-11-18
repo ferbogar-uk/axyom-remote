@@ -77,3 +77,19 @@ Update (2026-11-18, later): the session screen is now complete for everyday use.
 Not tested against a real desktop yet. Still not built: real push with the
 phone locked (needs the server, request #2), plan usage (request #3),
 attachments/images in replies, git commit prompt, Azure voice.
+Update (2026-11-18, morning): completed from the cloud session.
+- Agent badges (original monograms in AXYOM colours, not the companies' logos)
+  on every session row, waiting card and the session title.
+- Plan usage strip on the home screen, from the desktop's `planUsageBroadcast`
+  (decrypted on the phone; shows % per plan, reset time, "atualizado há X").
+- New sessions and replies go to the PC that holds the project
+  (`DeviceInfo.syncedProjectIds`), falling back to any online PC.
+- Reply with images: "+" next to the text box (photos or camera); images are
+  shrunk to 1024 px JPEG and sent as encrypted attachments on the queued prompt,
+  the format the desktop's `decryptMobileAttachments` reads.
+- Git commit proposals as a card: tick files, edit the message, commit or cancel.
+- Chat cleaned for Codex (exec and app-server), Gemini, Claude, Cursor and Grok,
+  following the desktop's raw parsers; system reminders hidden.
+- Voice: replies are read in pt-BR; the loop reopens the mic only after the last
+  sentence has been read (the old check could leave it stuck).
+All covered by Linux core tests where it is logic; none of it tested on a device yet.

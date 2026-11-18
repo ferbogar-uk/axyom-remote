@@ -3,8 +3,8 @@ import AxyomRemoteCore
 
 /// Home screen "Comando" (option A, approved 2026-11-18).
 /// Shows only what the sync index really carries: who is waiting for you,
-/// who is working, what happened last. Plan usage and approve/deny buttons
-/// from the mockup are NOT here yet (see docs/DESIGN.md, "Not built yet").
+/// who is working, what happened last, and the plan usage the PC publishes.
+/// Approving and replying happen inside each session.
 struct ComandoView: View {
     @EnvironmentObject private var model: AppModel
     @State private var project: String?
@@ -19,6 +19,7 @@ struct ComandoView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     header
                     statusBanner
+                    PlanUsageStrip(usage: model.snapshot.planUsage)
                     projectChips(board)
                     if !board.waiting.isEmpty { waitingSection(board.waiting) }
                     if !board.working.isEmpty { workingSection(board.working) }
@@ -113,7 +114,8 @@ struct ComandoView: View {
             ForEach(sessions) { s in
                 NavigationLink(value: s.id) {
                     VStack(alignment: .leading, spacing: 6) {
-                        HStack {
+                        HStack(spacing: 10) {
+                            AgentBadge(provider: s.provider)
                             Text(s.title).font(.headline).foregroundStyle(Theme.text).lineLimit(2)
                             Spacer(minLength: 8)
                             Text("\(s.projectName) · \(ProviderName.display(s.provider))").font(.caption).foregroundStyle(Theme.muted)
@@ -158,7 +160,8 @@ struct ComandoView: View {
     }
 
     private func row(_ s: FleetSession, trailing: String, tint: Color) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
+        HStack(alignment: .center, spacing: 10) {
+            AgentBadge(provider: s.provider)
             VStack(alignment: .leading, spacing: 2) {
                 Text(s.title).font(.body).foregroundStyle(Theme.text).lineLimit(1)
                 Text("\(s.projectName) · \(ProviderName.display(s.provider))").font(.caption).foregroundStyle(Theme.muted)

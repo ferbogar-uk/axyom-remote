@@ -86,7 +86,7 @@ struct VoiceView: View {
             .card(fill: Theme.amberSurface, stroke: Theme.amberBorder)
         case .reply(let prompt):
             actionCard(title: "Responder", detail: prompt, confirm: "Confirmar e enviar") { s in { client in
-                try await client.sendPrompt(sessionId: s.id, text: prompt, source: "voice", targetDeviceId: s.hostDeviceId ?? model.desktopDeviceId)
+                try await client.sendPrompt(sessionId: s.id, text: prompt, source: "voice", targetDeviceId: s.hostDeviceId ?? model.desktopId(forEncryptedProjectId: s.encryptedProjectId))
                 return "Resposta enviada para \"\(s.title)\"."
             } }
         case .approve:
@@ -147,7 +147,7 @@ struct VoiceView: View {
     /// Answer the first pending permission; if there is none, the first pending plan.
     private func decide(_ s: FleetSession, allow: Bool, client: RemoteClient) async throws -> String {
         let items = try await client.loadTranscript(sessionId: s.id)
-        let target = s.hostDeviceId ?? model.desktopDeviceId
+        let target = s.hostDeviceId ?? model.desktopId(forEncryptedProjectId: s.encryptedProjectId)
         if let p = PendingPrompts.permissions(in: items).first {
             try await client.respondToPermission(sessionId: s.id, promptId: p.id, allow: allow, targetDeviceId: target)
             return allow ? "Aprovado uma vez: \(p.rawCommand.isEmpty ? p.patternDisplayName : p.rawCommand)." : "Recusado: \(p.rawCommand.isEmpty ? p.patternDisplayName : p.rawCommand)."
@@ -179,7 +179,8 @@ struct VoiceView: View {
         sending = true; failure = nil
         defer { sending = false }
         do {
-            _ = try await client.createSession(projectId: project, provider: agent.providerId, prompt: prompt, targetDeviceId: model.desktopDeviceId)
+            let encrypted = board.projects.first(where: { $0.id == project })?.encryptedId
+            _ = try await client.createSession(projectId: project, provider: agent.providerId, prompt: prompt, targetDeviceId: model.desktopId(forEncryptedProjectId: encrypted))
             dismiss()
         } catch RemoteClient.ClientError.timeout {
             failure = "O PC não respondeu em 30 segundos."

@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 import AxyomRemoteCore
 
 /// Conversation of one session: read, reply (text or voice), approve or deny
@@ -25,6 +26,12 @@ struct SessionView: View {
     @StateObject private var listener = SpeechListener()
     @StateObject private var voice = ReplySpeaker()
     @FocusState private var typing: Bool
+    @State private var images: [PromptImage] = []
+    @State private var photoItems: [PhotosPickerItem] = []
+    @State private var showPhotos = false
+    @State private var showCamera = false
+    @State private var commitFiles: [String: Set<String>] = [:]     // proposalId -> files left ticked
+    @State private var commitMessages: [String: String] = [:]
 
     private var session: FleetSession? { model.snapshot.sessions.first { $0.id == sessionId } }
     private var visible: [ChatLine] { ChatLines.build(allItems, provider: session?.provider ?? "") }
@@ -46,6 +53,7 @@ struct SessionView: View {
                     ForEach(PendingPrompts.permissions(in: allItems)) { permissionCard($0) }
                     ForEach(PendingPrompts.questions(in: allItems)) { questionCard($0) }
                     ForEach(PendingPrompts.plans(in: allItems)) { planCard($0) }
+                    ForEach(PendingPrompts.commits(in: allItems)) { commitCard($0) }
                     if let notice { Text(notice).font(.footnote).foregroundStyle(Theme.green) }
                     if let actionError { Text(actionError).font(.subheadline).foregroundStyle(Theme.danger).card() }
                     Color.clear.frame(height: 1).id("end")
@@ -63,6 +71,12 @@ struct SessionView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.background, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 8) {
+                    if let provider = session?.provider { AgentBadge(provider: provider, size: 22) }
+                    Text(session?.title ?? "Sessão").font(.headline).foregroundStyle(Theme.text).lineLimit(1)
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     if conversation { endConversation() } else { startConversation() }
@@ -119,6 +133,25 @@ struct SessionView: View {
             }
         }
         .onDisappear { listener.stop(); voice.stop() }
+        .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 4, matching: .images)
+        .onChange(of: photoItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task {
+                for (index, item) in items.enumerated() {
+                    if let data = try? await item.loadTransferable(type: Data.self), let ui = UIImage(data: data),
+                       let img = ImageShrink.prompt(from: ui, name: "foto-\(images.count + index + 1).jpg") {
+                        images.append(img)
+                    }
+                }
+                photoItems = []
+            }
+        }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { ui in
+                if let img = ImageShrink.prompt(from: ui, name: "camara-\(images.count + 1).jpg") { images.append(img) }
+            }
+            .ignoresSafeArea()
+        }
     }
 
     // MARK: Conversation loop
@@ -165,7 +198,16 @@ struct SessionView: View {
             if listener.listening && !listener.transcript.isEmpty {
                 Text("“\(listener.transcript)”").font(.footnote).foregroundStyle(Theme.textSoft).lineLimit(3)
             }
+            AttachmentTray(images: $images)
             HStack(alignment: .bottom, spacing: 8) {
+                Menu {
+                    Button { showPhotos = true } label: { Label("Escolher fotografias", systemImage: "photo.on.rectangle") }
+                    Button { showCamera = true } label: { Label("Tirar foto", systemImage: "camera") }
+                } label: {
+                    Image(systemName: "plus").font(.title3.weight(.semibold)).frame(width: 44, height: 48)
+                        .foregroundStyle(Theme.text)
+                }
+                .accessibilityLabel("Anexar imagem")
                 TextField("Responder ao agente…", text: $draft, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($typing)
@@ -186,7 +228,7 @@ struct SessionView: View {
                 .accessibilityLabel(listener.listening ? "Parar de ouvir" : "Falar")
                 Button {
                     let text = draft
-                    Task { await send(text, source: "keyboard") }
+                    Task { await send(text, source: "keyboard", images: images) }
                 } label: {
                     Image(systemName: "arrow.up").font(.title3.weight(.semibold)).frame(width: 48, height: 48)
                         .foregroundStyle(canSend ? Theme.onAmber : Theme.muted)
@@ -202,7 +244,7 @@ struct SessionView: View {
     }
 
     private var canSend: Bool {
-        !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && busyId == nil && model.snapshot.connected
+        (!draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty) && busyId == nil && model.snapshot.connected
     }
 
     @ViewBuilder private func bubble(_ item: ChatLine) -> some View {
@@ -313,6 +355,51 @@ struct SessionView: View {
         .card(fill: Theme.amberSurface, stroke: Theme.amberBorder)
     }
 
+    @ViewBuilder private func commitCard(_ c: PendingCommit) -> some View {
+        let ticked = commitFiles[c.id] ?? Set(c.files)
+        VStack(alignment: .leading, spacing: 10) {
+            Text("O agente propõe um commit").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.amberLight)
+            if !c.reasoning.isEmpty { Text(c.reasoning).font(.footnote).foregroundStyle(Theme.muted) }
+            ForEach(c.files, id: \.self) { file in
+                let on = ticked.contains(file)
+                Button {
+                    var set = ticked
+                    if on { set.remove(file) } else { set.insert(file) }
+                    commitFiles[c.id] = set
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: on ? "checkmark.square.fill" : "square").foregroundStyle(on ? Theme.amber : Theme.muted)
+                        Text(file).font(.system(.footnote, design: .monospaced)).foregroundStyle(Theme.text).lineLimit(2)
+                        Spacer(minLength: 0)
+                    }
+                    .frame(minHeight: 36)
+                }
+                .buttonStyle(.plain)
+            }
+            TextField("Mensagem do commit", text: Binding(get: { commitMessages[c.id] ?? c.message }, set: { commitMessages[c.id] = $0 }), axis: .vertical)
+                .lineLimit(1...4)
+                .font(.system(.footnote, design: .monospaced))
+                .foregroundStyle(Theme.text)
+                .padding(10)
+                .background(Theme.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            HStack(spacing: 10) {
+                Button("Cancelar") {
+                    act(c.id) { try await $0.respondToCommit(sessionId: sessionId, proposalId: c.id, commit: false, files: [], message: "", targetDeviceId: target) }
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                Button("Fazer commit") {
+                    let files = c.files.filter { ticked.contains($0) }
+                    let message = (commitMessages[c.id] ?? c.message).trimmingCharacters(in: .whitespacesAndNewlines)
+                    act(c.id) { try await $0.respondToCommit(sessionId: sessionId, proposalId: c.id, commit: true, files: files, message: message, targetDeviceId: target) }
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .disabled(ticked.isEmpty || (commitMessages[c.id] ?? c.message).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .disabled(busyId != nil || !online)
+        }
+        .card(fill: Theme.amberSurface, stroke: Theme.amberBorder)
+    }
+
     private func feedbackBinding(_ id: String) -> Binding<String> {
         Binding(get: { planFeedback[id] ?? "" }, set: { planFeedback[id] = $0 })
     }
@@ -342,7 +429,7 @@ struct SessionView: View {
 
     // MARK: Actions
 
-    private var target: String? { session?.hostDeviceId ?? model.desktopDeviceId }
+    private var target: String? { session?.hostDeviceId ?? model.desktopId(forEncryptedProjectId: session?.encryptedProjectId) }
 
     private func act(_ id: String, _ work: @escaping (RemoteClient) async throws -> Void) {
         guard let client = model.client else { return }
@@ -361,14 +448,15 @@ struct SessionView: View {
         }
     }
 
-    private func send(_ text: String, source: String) async {
+    private func send(_ text: String, source: String, images: [PromptImage] = []) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let client = model.client, !trimmed.isEmpty else { return }
+        guard let client = model.client, !trimmed.isEmpty || !images.isEmpty else { return }
         busyId = "send"
         defer { busyId = nil }
         do {
-            try await client.sendPrompt(sessionId: sessionId, text: trimmed, source: source, targetDeviceId: target)
+            try await client.sendPrompt(sessionId: sessionId, text: trimmed, images: images, source: source, targetDeviceId: target)
             draft = ""
+            if !images.isEmpty { self.images = [] }
             actionError = nil
             notice = online ? "Resposta enviada. À espera do agente…" : "Resposta guardada. Corre quando o PC ligar."
             typing = false

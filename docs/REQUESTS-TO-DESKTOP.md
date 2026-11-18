@@ -47,6 +47,9 @@ the notification) will be done once the server message exists.
 
 ## 3. Plan usage / progress on the iPhone
 
+Status: delivered by the desktop (planUsageBroadcast, HANDOFF 6a); the phone
+shows it on the home screen since 18 Nov 2026.
+
 The home screen design has a plan usage bar (Claude/Codex limits, % used, reset
 time). Nothing on the sync wire carries it today. Proposal: the desktop
 publishes an encrypted `usage` blob in the index room (like encryptedClientMetadata),

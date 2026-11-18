@@ -24,6 +24,11 @@ final class AppModel: ObservableObject {
         snapshot.devices.first { $0.type == "desktop" && $0.isOnline == true }?.deviceId
     }
 
+    /// The online PC that holds this project (by its encrypted id), else any online PC.
+    func desktopId(forEncryptedProjectId encrypted: String?) -> String? {
+        DesktopRouting.desktop(forEncryptedProjectId: encrypted, devices: snapshot.devices)?.deviceId
+    }
+
     func board(project: String? = nil) -> FleetBoard {
         FleetBoard.build(snapshot.sessions, project: project)
     }
