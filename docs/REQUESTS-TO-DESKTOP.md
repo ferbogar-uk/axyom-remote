@@ -73,6 +73,22 @@ the phone can read (e.g. in encryptedClientMetadata) so the chip shows it.
 The phone will send `options` and enable the picker once this lands; until then
 the chip only shows the current model and says it cannot switch yet.
 
+Status: done on the desktop (axyom-redesign-backup 0fc3587, 18 Nov 2026).
+- Send `options: { model?, effortLevel?, mode? }` on the queued prompt as
+  today. The desktop keeps them on the queued row and applies them right
+  before that prompt runs (never under a running turn): `session.model`,
+  `metadata.effortLevel` (clamped to the model's ceiling), `mode`. A model
+  from another provider is ignored on a session that already has messages
+  (same rule as the desktop); effort is still applied.
+- Current effort: index entries now carry plaintext `effortLevel` (absent =
+  the desktop default, see `defaultEffort` below). `model` was already there.
+- What to offer in the chip: the decrypted `planUsageBroadcast` JSON now has
+  `models: [{ id, name, provider, providerLabel, efforts: [..] }]` (exactly
+  the desktop pickers' enabled list; `efforts` empty = no effort control for
+  that model; send `id` back as `options.model`) and `defaultEffort`.
+  Refreshed every 10 min. Verified live: 52 models, 25 with efforts.
+- Not tested end to end from a phone yet.
+
 ## 5. Gemini (Antigravity) shell commands time out on Windows
 
 Seen 18 Nov 2026: asked "what day is today", Gemini ran `date`, which on Windows
