@@ -55,3 +55,5 @@ never been run on a device.
 ## Brand update (2026-11-18)
 
 The app now uses the AXYOM brand pack (Corrected edition, direction 01): dark tokens from tokens.json (graphite #0B0F14, navy #0F1B2D, raised #17283D, amber #FF9F3D, text #E5E7EB, muted #AAB6C5), the app icon (1024 px, flattened to an opaque square), the flat symbol in the Comando header and the white lockup on the pairing screen. Fonts: Sora and Inter are not bundled (licence files needed), so the app still uses the system font. The pack says it is a design candidate, not trademark-cleared. Not yet checked on a device: icon at small sizes, contrast of the new colours on screen.
+
+Logo update (2026-11-18): Ricardo wants the dimensional (3D/metallic) logo in the app, not the flat one. The Comando header uses axyom-symbol-dark and the pairing screen uses axyom-lockup-dark from the brand pack. The brand guide recommends flat artwork at small sizes and the dimensional version only above 240 px wide; the header symbol is small, so check how it reads on the iPhone.
