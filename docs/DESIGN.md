@@ -105,3 +105,10 @@ Update (2026-11-18, 11:00): look matched to the desktop and the Claude app, as R
   (refresh, voice conversation, stop).
 - Home: floating bar with "Nova sessão em…" (neutral) and the orange voice button.
 - Model chip shows the session's model; switching needs desktop request #4.
+
+Update (2026-11-18, 12:40): Settings in the style of the Claude app.
+Computers (online/offline, project count), plan usage, appearance picker
+(Light / Dark / System with previews), voice language (pt-BR / pt-PT), reading
+speed, silence before sending (1.5 / 1.8 / 2.5 s), notifications on/off, haptic
+tap on send, link to iPhone permissions, version and server, unpair. All stored
+on the phone (UserDefaults) and used by the app; nothing in it is decoration.

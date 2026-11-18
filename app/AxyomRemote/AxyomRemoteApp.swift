@@ -14,6 +14,7 @@ struct AxyomRemoteApp: App {
 
 struct RootView: View {
     @EnvironmentObject private var model: AppModel
+    @AppStorage(Prefs.Key.appearance) private var appearance = "system"
 
     var body: some View {
         ZStack {
@@ -25,5 +26,6 @@ struct RootView: View {
             }
         }
         .tint(Theme.amber)
+        .preferredColorScheme(Prefs.colorScheme(appearance))
     }
 }

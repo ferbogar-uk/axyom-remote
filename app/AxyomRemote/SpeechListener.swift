@@ -24,7 +24,7 @@ final class SpeechListener: ObservableObject {
 
     /// Portuguese recognizer: on-device if any variant supports it, else the first available one.
     private static func pickRecognizer() -> SFSpeechRecognizer? {
-        let ids = ["pt-BR", "pt-PT"]
+        let ids = Prefs.voiceLanguage == "pt-PT" ? ["pt-PT", "pt-BR"] : ["pt-BR", "pt-PT"]
         let all = ids.compactMap { SFSpeechRecognizer(locale: Locale(identifier: $0)) }
         return all.first { $0.isAvailable && $0.supportsOnDeviceRecognition } ?? all.first { $0.isAvailable } ?? all.first
     }
@@ -36,7 +36,7 @@ final class SpeechListener: ObservableObject {
     /// Seconds of silence after speech that end listening when auto-stop is on.
     /// 1.8 s: pauses no longer erase what was said (TranscriptJoiner keeps it),
     /// so the wait can be shorter than AVA's 2.5 s; tapping still sends at once.
-    var silenceSeconds: TimeInterval = 1.8
+    var silenceSeconds: TimeInterval { Prefs.silenceSeconds }
 
     func toggle(autoStop: Bool = false) {
         if listening { stop() } else { self.autoStop = autoStop; start() }

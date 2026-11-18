@@ -68,7 +68,7 @@ final class AppModel: ObservableObject {
     /// while the app is running (open or recently in the background): iOS
     /// suspends the connection soon after. Real push needs the server (docs/REQUESTS-TO-DESKTOP.md).
     private func notifyWaiting(_ s: FleetSession) {
-        guard UIApplication.shared.applicationState != .active else { return }
+        guard Prefs.notifications, UIApplication.shared.applicationState != .active else { return }
         let content = UNMutableNotificationContent()
         content.title = "À espera de ti"
         content.body = "\(s.title) · \(s.projectName)"

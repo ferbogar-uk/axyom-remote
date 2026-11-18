@@ -19,8 +19,10 @@ final class ReplySpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         synth.delegate = self
     }
 
-    private static let voice: AVSpeechSynthesisVoice? =
-        AVSpeechSynthesisVoice(language: "pt-BR") ?? AVSpeechSynthesisVoice(language: "pt-PT")
+    private static var voice: AVSpeechSynthesisVoice? {
+        let first = Prefs.voiceLanguage, second = first == "pt-PT" ? "pt-BR" : "pt-PT"
+        return AVSpeechSynthesisVoice(language: first) ?? AVSpeechSynthesisVoice(language: second)
+    }
 
     func speak(_ lines: [String]) {
         let clean = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
@@ -31,7 +33,7 @@ final class ReplySpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         for line in clean {
             let utterance = AVSpeechUtterance(string: line)
             utterance.voice = Self.voice
-            utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 1.08
+            utterance.rate = min(AVSpeechUtteranceMaximumSpeechRate, AVSpeechUtteranceDefaultSpeechRate * Prefs.speechRateMultiplier)
             pending += 1
             synth.speak(utterance)
         }

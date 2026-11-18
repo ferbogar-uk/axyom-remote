@@ -477,6 +477,7 @@ struct SessionView: View {
                 try await work(client)
                 actionError = nil
                 notice = "Enviado ao PC."
+                Prefs.tap()
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
                 await fullLoad()
             } catch {
@@ -493,6 +494,7 @@ struct SessionView: View {
         defer { busyId = nil }
         do {
             try await client.sendPrompt(sessionId: sessionId, text: trimmed, images: images, source: source, targetDeviceId: target)
+            Prefs.tap()
             draft = ""
             if !images.isEmpty { self.images = [] }
             actionError = nil
