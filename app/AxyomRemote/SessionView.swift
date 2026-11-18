@@ -556,10 +556,16 @@ struct SessionView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if open && steps.count > 1 {
-                VStack(alignment: .leading, spacing: 4) {
+            if open {
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(steps) { s in
-                        Text(s.text).font(.system(.footnote, design: .monospaced)).foregroundStyle(Theme.muted).lineLimit(2)
+                        VStack(alignment: .leading, spacing: 3) {
+                            if steps.count > 1 { Text(s.text).font(.footnote).foregroundStyle(Theme.textSoft) }
+                            if let d = s.detail, !d.isEmpty {
+                                Text(d).font(.system(.caption2, design: .monospaced)).foregroundStyle(Theme.muted)
+                                    .lineLimit(4).textSelection(.enabled)
+                            }
+                        }
                     }
                 }
                 .padding(.leading, 18)
@@ -571,7 +577,10 @@ struct SessionView: View {
     @ViewBuilder private func bubble(_ item: ChatLine) -> some View {
         let mine = item.mine
         if !mine {
-            MarkdownText(text: item.text)
+            VStack(alignment: .leading, spacing: 10) {
+                MarkdownText(text: item.text)
+                RefCards(refs: Refs.find(item.text))
+            }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contextMenu { copyButton(item.text) }
         } else {

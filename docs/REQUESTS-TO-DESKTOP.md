@@ -220,3 +220,26 @@ The phone gives up after 8 s and keeps Apple's live text, so a slow or
 missing endpoint never blocks a message.
 
 Status: waiting for the desktop/server session.
+
+## 9. Worktree/branch and PC file previews for the iPhone
+
+Ricardo wants each conversation short and visual (18 Nov 2026): what the
+agent is doing in one line, code hidden, and links to everything relevant,
+with thumbnails of photos and screenshots. The phone now folds steps and
+code and shows cards for links and PC paths, but two things need the desktop:
+
+1. **Worktree and branch per session.** Add to the session index entry
+   (inside the encrypted metadata, like the title): `worktreeName`
+   (e.g. "azure-listen"), `branch`, and `worktreePath`. The phone shows them
+   under the session title only when the session runs in a worktree.
+2. **Preview of PC files the agent mentions.** When the agent's reply names
+   an image or a document on the PC (a screenshot, a PNG, a PDF), the phone
+   can only show the name and copy the path today. Proposal: a sessionControl
+   `messageType: "file_preview"`, `payload: { path }`. The desktop checks the
+   path is inside the session's workspace or worktree (never elsewhere),
+   makes a small JPEG (max 800 px, first page for a PDF), encrypts it like an
+   attachment and answers in the session room with
+   `{ type: "filePreview", path, encryptedImage, iv }`. Nothing is sent unless
+   the phone asks, and only for paths the agent itself mentioned.
+
+Status: waiting for the desktop session.

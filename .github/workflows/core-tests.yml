@@ -30,4 +30,4 @@ jobs:
         working-directory: core
         run: |
           set -o pipefail
-          swift test 2>&1 | tail -n 80
+          swift test 2>&1 | tee test.log | tail -n 80 || { echo "--- failures ---"; grep -E "error:|' failed" test.log | head -40; exit 1; }
