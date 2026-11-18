@@ -187,4 +187,4 @@ Secrets AZURE_SPEECH_KEY / AZURE_SPEECH_REGION: Ricardo pastes them with the
 /voice/status says configured: false. Tests: 6 unit tests
 (`node --test test/voice.test.ts`) and the live smoke test; the real MP3 check
 ran once the key was in: Azure returned MP3 in under 1 s (18 Nov 2026).
-Not yet heard from the phone.
+Heard on the real iPhone 18 Nov 2026 20:41 (Ricardo: " voz funcionou).
