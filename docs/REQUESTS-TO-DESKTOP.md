@@ -97,6 +97,10 @@ the reply took very long. Suggest: on Windows, tell the agent (system prompt /
 tool hint) that `date` and `time` are interactive and to use `date /t`,
 `Get-Date` or the date already in its context. Not an iPhone issue.
 
+Status: done on the desktop (18 Nov 2026). run_command now closes stdin, so
+`date` and any other prompting command return at once (measured 0.13 s
+instead of hanging), and the tool description points to `date /t` / Get-Date.
+
 ## 6. Remove a queued prompt from the iPhone ("undo send")
 
 Ricardo wants "Undo send" like the Claude app: a queued prompt can be taken
