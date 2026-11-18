@@ -126,3 +126,9 @@ Update (2026-11-18, 13:00):
   "Pôr na fila" or "Enviar agora". Send now = stop the turn, then run the queue,
   as the desktop's own send-now does. No "undo send": once the PC has the
   prompt in its queue the phone cannot remove it (would need a desktop change).
+
+Update (2026-11-18, 14:10): model and effort picker is live (desktop request #4
+done). The chip lists the models the PC publishes for the session's provider
+and their effort levels; the choice travels as `options` on the next message
+and the desktop applies it before running it. Current effort comes from the
+index entry's `effortLevel` (or the desktop default). Not tested end to end yet.

@@ -28,6 +28,8 @@ struct SessionView: View {
     @FocusState private var typing: Bool
     @State private var images: [PromptImage] = []
     @State private var localQueued: [QueuedPreview] = []
+    @State private var pendingModel: String?
+    @State private var pendingEffort: String?
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showPhotos = false
     @State private var showCamera = false
@@ -291,31 +293,62 @@ struct SessionView: View {
         ModelInfo.display(ModelInfo.latest(in: allItems)) ?? ModelName.display(session?.model, provider: session?.provider)
     }
 
-    /// Model and effort menu. The lists are the desktop's; choosing is greyed
-    /// out until the PC accepts a change from the phone (REQUESTS-TO-DESKTOP #4).
+    private var desktopModels: [PlanUsage.ModelChoice] { model.snapshot.planUsage.first(where: { !$0.models.isEmpty })?.models ?? [] }
+    private var modelChoices: [PlanUsage.ModelChoice] { ModelPicker.choices(for: session?.provider ?? "", in: desktopModels) }
+    private var chosenModelId: String? { pendingModel ?? session?.model }
+    private var chosenModel: PlanUsage.ModelChoice? { ModelPicker.current(chosenModelId, in: desktopModels) }
+    private var chosenEffort: String? {
+        pendingEffort ?? session?.effortLevel ?? model.snapshot.planUsage.first?.defaultEffort
+    }
+
+    /// What to send with the next message: only what you changed.
+    private var promptOptions: PromptOptions {
+        PromptOptions(model: pendingModel.flatMap { $0 == session?.model ? nil : $0 },
+                      effortLevel: pendingEffort.flatMap { $0 == session?.effortLevel ? nil : $0 })
+    }
+
+    /// Model and effort picker, filled from the list the PC publishes. The choice
+    /// travels with your next message and the PC applies it before running it.
     private var modelChip: some View {
         Menu {
-            Section("Modelo desta sessão") {
-                Label(modelLabel, systemImage: "checkmark")
-            }
-            Section("Esforço") {
-                ForEach(EffortLevels.all, id: \.key) { level in
-                    Button(level.label) {}.disabled(true)
+            if modelChoices.isEmpty {
+                Text("O PC ainda não enviou a lista de modelos.")
+            } else {
+                Section("Modelo") {
+                    ForEach(modelChoices) { m in
+                        Button {
+                            pendingModel = m.id
+                            if let e = pendingEffort ?? session?.effortLevel, !m.efforts.contains(e) { pendingEffort = nil }
+                        } label: {
+                            if m.id == chosenModelId { Label(m.name, systemImage: "checkmark") } else { Text(m.name) }
+                        }
+                    }
                 }
-            }
-            Section {
-                Text("Trocar modelo e esforço daqui chega quando o PC aceitar (pedido #4). Por agora muda no PC.")
+                if let efforts = chosenModel?.efforts, !efforts.isEmpty {
+                    Section("Esforço") {
+                        ForEach(efforts, id: \.self) { e in
+                            Button { pendingEffort = e } label: {
+                                let name = ModelPicker.effortLabel(e) ?? e
+                                if e == chosenEffort { Label(name, systemImage: "checkmark") } else { Text(name) }
+                            }
+                        }
+                    }
+                }
+                Section { Text("Muda a partir da próxima mensagem.") }
             }
         } label: {
             HStack(spacing: 4) {
-                Text(modelLabel).foregroundStyle(Theme.text)
+                Text(chosenModel?.name ?? modelLabel).foregroundStyle(Theme.text)
+                if chosenModel?.efforts.isEmpty == false, let e = ModelPicker.effortLabel(chosenEffort) {
+                    Text(e).foregroundStyle(Theme.muted)
+                }
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(Theme.muted)
             }
             .font(.subheadline).lineLimit(1)
             .padding(.horizontal, 12).frame(height: 36)
             .background(Theme.elevated, in: Capsule())
         }
-        .accessibilityLabel("Modelo da sessão: \(modelLabel)")
+        .accessibilityLabel("Modelo e esforço: \(chosenModel?.name ?? modelLabel)")
     }
 
     /// Prompts waiting for the agent: the PC's queue plus the ones this phone just
@@ -579,7 +612,7 @@ struct SessionView: View {
         defer { busyId = nil }
         do {
             let wasBusy = busy
-            let id = try await client.sendPrompt(sessionId: sessionId, text: trimmed, images: images, source: source, targetDeviceId: target)
+            let id = try await client.sendPrompt(sessionId: sessionId, text: trimmed, images: images, options: promptOptions, source: source, targetDeviceId: target)
             Prefs.tap()
             if wasBusy && !now { localQueued.append(QueuedPreview(id: id, text: trimmed)) }
             if now && wasBusy { try await client.sendNow(sessionId: sessionId, targetDeviceId: target) }
