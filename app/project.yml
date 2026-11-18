@@ -4,7 +4,7 @@
 # secrets and App Store Connect key are NOT shared with MURY or Formetra.
 name: AxyomRemote
 options:
-  bundleIdPrefix: uk.co.ferbogar
+  bundleIdPrefix: com.axyom
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
@@ -32,7 +32,7 @@ targets:
       base:
         # PLACEHOLDER: not registered anywhere yet. HANDOFF step 4: Ricardo
         # decides the bundle id and creates the app in App Store Connect.
-        PRODUCT_BUNDLE_IDENTIFIER: uk.co.ferbogar.axyomremote
+        PRODUCT_BUNDLE_IDENTIFIER: com.axyom.remote
         PRODUCT_NAME: AxyomRemote
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES

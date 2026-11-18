@@ -7,7 +7,7 @@ import AxyomRemoteCore
 enum PairingKeychain {
     struct KeychainError: Error { let status: OSStatus }
 
-    private static let service = "uk.co.ferbogar.axyomremote"
+    private static let service = "com.axyom.remote"
     private static let account = "pairing"
 
     private static var base: [String: Any] {
