@@ -10,6 +10,20 @@ public protocol SyncSocket: AnyObject, Sendable {
 
 public typealias SyncSocketFactory = @Sendable (URL) async throws -> SyncSocket
 
+/// An image to send with a prompt (already compressed by the app, usually JPEG).
+public struct PromptImage: Equatable, Sendable, Identifiable {
+    public var id: String
+    public var filename: String
+    public var mimeType: String
+    public var data: Data
+    public var width: Int?
+    public var height: Int?
+
+    public init(id: String = UUID().uuidString.lowercased(), filename: String, mimeType: String = "image/jpeg", data: Data, width: Int? = nil, height: Int? = nil) {
+        self.id = id; self.filename = filename; self.mimeType = mimeType; self.data = data; self.width = width; self.height = height
+    }
+}
+
 /// One transcript row after decryption. `text` is a best-effort readable
 /// rendering; `raw` keeps the desktop's content for richer views later.
 public struct TranscriptItem: Equatable, Sendable, Identifiable {
@@ -34,6 +48,8 @@ public actor RemoteClient {
         public var lastError: String?
         /// Rows the phone could not decrypt (written under another key).
         public var unreadableRows = 0
+        /// Plan usage per desktop (latest broadcast each), newest first.
+        public var planUsage: [PlanUsage] = []
         public init() {}
     }
 
@@ -60,6 +76,7 @@ public actor RemoteClient {
     /// written back without re-encrypting fields the phone cannot rebuild.
     private var entries: [String: SessionIndexEntry] = [:]
     private var devices: [String: DeviceInfo] = [:]
+    private var usage: [String: PlanUsage] = [:]
     private var snapshot = Snapshot()
     private var onChange: (@Sendable (Snapshot) -> Void)?
     private var pendingCreates: [String: CheckedContinuation<String, Error>] = [:]
@@ -162,6 +179,7 @@ public actor RemoteClient {
     private func publish() {
         snapshot.sessions = sessions.values.sorted { $0.lastActivity > $1.lastActivity }
         snapshot.devices = devices.values.sorted { $0.name < $1.name }
+        snapshot.planUsage = usage.values.sorted { $0.updatedAt > $1.updatedAt }
         onChange?(snapshot)
     }
 
@@ -194,6 +212,9 @@ public actor RemoteClient {
                 else { cont.resume(throwing: ClientError.refused(error ?? "the desktop refused")) }
             }
             return
+        case .planUsageBroadcast(let deviceId, let encrypted, let iv, _):
+            guard let u = PlanUsage.decrypt(deviceId: deviceId, encryptedUsage: encrypted, usageIv: iv, crypto: crypto) else { return }
+            usage[deviceId] = u
         case .error(let code, let message, _):
             snapshot.lastError = "\(code): \(message)"
         default:
@@ -266,15 +287,22 @@ public actor RemoteClient {
     /// it in its queue and runs it), then a `prompt` control to nudge it to start.
     /// Returns the prompt id.
     @discardableResult
-    public func sendPrompt(sessionId: String, text: String, source: String = "keyboard", targetDeviceId: String?) async throws -> String {
+    public func sendPrompt(sessionId: String, text: String, images: [PromptImage] = [], source: String = "keyboard", targetDeviceId: String?) async throws -> String {
         guard let socket = index else { throw ClientError.notConnected }
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty && !images.isEmpty { trimmed = images.count == 1 ? "Vê a imagem em anexo." : "Vê as imagens em anexo." }
         guard !trimmed.isEmpty else { throw ClientError.refused("empty prompt") }
         guard let current = entries[sessionId] else { throw ClientError.refused("unknown session") }
         let promptId = UUID().uuidString.lowercased()
         let nowMs = (now().timeIntervalSince1970 * 1000).rounded()
         let sealed = try crypto.encrypt(trimmed)
-        let queued = EncryptedQueuedPrompt(id: promptId, encryptedPrompt: sealed.ciphertext, iv: sealed.iv, timestamp: nowMs, source: source)
+        let attachments = try images.map { img -> EncryptedAttachment in
+            let s = try crypto.encryptData(img.data)
+            return EncryptedAttachment(id: img.id, filename: img.filename, mimeType: img.mimeType, encryptedData: s.ciphertext,
+                                       iv: s.iv, size: img.data.count, width: img.width, height: img.height)
+        }
+        let queued = EncryptedQueuedPrompt(id: promptId, encryptedPrompt: sealed.ciphertext, iv: sealed.iv, timestamp: nowMs, source: source,
+                                           encryptedAttachments: attachments.isEmpty ? nil : attachments)
         let entry = SessionIndexEntry(
             sessionId: current.sessionId,
             encryptedProjectId: current.encryptedProjectId,
@@ -294,6 +322,21 @@ public actor RemoteClient {
         try await socket.send(ClientMessage.indexUpdate(entry).encoded())
         try await sendControl(sessionId: sessionId, type: "prompt", payload: nil, targetDeviceId: targetDeviceId ?? current.hostDeviceId)
         return promptId
+    }
+
+    /// Commit (or cancel) a git commit proposal. `files` and `message` are what the user confirmed.
+    public func respondToCommit(sessionId: String, proposalId: String, commit: Bool, files: [String], message: String, targetDeviceId: String?) async throws {
+        var response: [String: JSONValue] = ["action": .string(commit ? "committed" : "cancelled")]
+        if commit {
+            response["files"] = .array(files.map { .string($0) })
+            response["message"] = .string(message)
+        }
+        let payload: JSONValue = .object([
+            "promptType": .string("git_commit"),
+            "promptId": .string(proposalId),
+            "response": .object(response),
+        ])
+        try await sendControl(sessionId: sessionId, type: "prompt_response", payload: payload, targetDeviceId: targetDeviceId)
     }
 
     /// Ask the PC to stop what the session is doing.

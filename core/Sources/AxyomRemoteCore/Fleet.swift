@@ -13,8 +13,10 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
     public var isArchived: Bool
     public var hostDeviceId: String?
     public var lastActivity: Date
+    /// The index entry's project ciphertext, used to find which PC holds the project.
+    public var encryptedProjectId: String = ""
 
-    public init(id: String, title: String, projectId: String, provider: String, model: String? = nil, isExecuting: Bool = false, hasPendingPrompt: Bool = false, queuedPromptCount: Int = 0, isArchived: Bool = false, hostDeviceId: String? = nil, lastActivity: Date) {
+    public init(id: String, title: String, projectId: String, provider: String, model: String? = nil, isExecuting: Bool = false, hasPendingPrompt: Bool = false, queuedPromptCount: Int = 0, isArchived: Bool = false, hostDeviceId: String? = nil, lastActivity: Date, encryptedProjectId: String = "") {
         self.id = id
         self.title = title
         self.projectId = projectId
@@ -26,6 +28,7 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
         self.isArchived = isArchived
         self.hostDeviceId = hostDeviceId
         self.lastActivity = lastActivity
+        self.encryptedProjectId = encryptedProjectId
     }
 
     /// Folder name of the project ("C:\…\AXYOM - AI Development OS" -> "AXYOM - AI Development OS").
@@ -58,7 +61,8 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
             queuedPromptCount: entry.queuedPromptCount ?? 0,
             isArchived: entry.isArchived ?? false,
             hostDeviceId: entry.hostDeviceId,
-            lastActivity: Date(timeIntervalSince1970: max(entry.lastMessageAt, entry.updatedAt) / 1000)
+            lastActivity: Date(timeIntervalSince1970: max(entry.lastMessageAt, entry.updatedAt) / 1000),
+            encryptedProjectId: entry.encryptedProjectId
         )
     }
 }
@@ -70,6 +74,8 @@ public struct FleetBoard: Equatable, Sendable {
         public var name: String
         public var sessionCount: Int
         public var attentionCount: Int
+        /// Ciphertext of the project path, as in the index (for PC routing).
+        public var encryptedId: String = ""
     }
 
     public var waiting: [FleetSession]
@@ -83,7 +89,7 @@ public struct FleetBoard: Equatable, Sendable {
         let live = sessions.filter { !$0.isArchived }
         var byProject: [String: Project] = [:]
         for s in live {
-            var p = byProject[s.projectId] ?? Project(id: s.projectId, name: projectName(s.projectId), sessionCount: 0, attentionCount: 0)
+            var p = byProject[s.projectId] ?? Project(id: s.projectId, name: projectName(s.projectId), sessionCount: 0, attentionCount: 0, encryptedId: s.encryptedProjectId)
             p.sessionCount += 1
             if s.hasPendingPrompt { p.attentionCount += 1 }
             byProject[s.projectId] = p

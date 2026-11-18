@@ -39,14 +39,19 @@ public enum ChatLines {
     }
 
     static func userText(_ item: TranscriptItem) -> String? {
-        guard let value = json(item.raw) else { return item.raw }
+        guard let value = json(item.raw) else { return isReminder(item.raw) ? nil : item.raw }
         if let type = value["type"]?.string, promptTypes.contains(type) { return nil }
         // Claude Code tool results come back as "user" rows; they are not the person talking.
         if value["type"]?.string == "user" { return nil }
         for key in ["prompt", "text", "content", "message"] {
-            if let s = value[key]?.string, !s.isEmpty { return s }
+            if let s = value[key]?.string, !s.isEmpty { return isReminder(s) ? nil : s }
         }
         return nil
+    }
+
+    /// System reminders the desktop injects as input rows are not the person talking.
+    static func isReminder(_ s: String) -> Bool {
+        s.contains("<SYSTEM_REMINDER>") || s.contains("<system-reminder>")
     }
 
     static let promptTypes: Set<String> = [
@@ -55,6 +60,8 @@ public enum ChatLines {
         "exit_plan_mode_request", "exit_plan_mode_response",
         "git_commit_request", "git_commit_response",
         "request_user_input_request", "request_user_input_response",
+        "git_commit_proposal", "git_commit_proposal_response",
+        "nimbalyst_tool_use", "nimbalyst_tool_result",
     ]
 
     static func agentText(_ item: TranscriptItem, provider: String) -> String? {
@@ -62,6 +69,10 @@ public enum ChatLines {
         let type = value["type"]?.string ?? ""
         if promptTypes.contains(type) { return nil }
         if type == "item.completed" { return completedText(value["item"]) }
+        // Codex app-server envelope: { method: "item/completed", params: { item } }.
+        if let method = value["method"]?.string {
+            return method == "item/completed" ? completedText(value["params"]?["item"]) : nil
+        }
 
         if provider.hasPrefix("claude") {
             guard type == "assistant" else { return nil }
@@ -83,7 +94,8 @@ public enum ChatLines {
     static func completedText(_ item: JSONValue?) -> String? {
         guard let item else { return nil }
         let kind = item["type"]?.string ?? ""
-        if kind.contains("reasoning") || kind.contains("tool") || kind.contains("command") { return nil }
+        let k = kind.lowercased()
+        if k.contains("reasoning") || k.contains("tool") || k.contains("command") || k.contains("filechange") || k.contains("todo") { return nil }
         if let role = item["role"]?.string, role != "assistant" { return nil }
         return blocksText(item["content"]) ?? item["text"]?.string
     }

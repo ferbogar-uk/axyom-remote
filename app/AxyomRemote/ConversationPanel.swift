@@ -50,7 +50,7 @@ struct ConversationPanel: View {
             Text(title).font(.title2.weight(.semibold)).foregroundStyle(Theme.text)
             Button(action: onTapMain) {
                 ZStack {
-                    Circle().fill(phase == .listening ? Theme.amber : Theme.raised)
+                    Circle().fill(phase == .listening ? Theme.amber : Theme.elevated)
                         .frame(width: 168, height: 168)
                         .overlay(Circle().stroke(phase == .speaking ? Theme.green : Theme.amber, lineWidth: 3))
                     if phase == .waiting {

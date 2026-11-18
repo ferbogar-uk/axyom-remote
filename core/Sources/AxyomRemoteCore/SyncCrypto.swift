@@ -54,6 +54,22 @@ public struct SyncCrypto: Sendable {
         return Sealed(ciphertext: joined.base64EncodedString(), iv: Data(nonce).base64EncodedString())
     }
 
+    /// Seal raw bytes (images). Same wire format as text.
+    public func encryptData(_ data: Data) throws -> Sealed {
+        let nonce = AES.GCM.Nonce()
+        let box = try AES.GCM.seal(data, using: key, nonce: nonce)
+        return Sealed(ciphertext: (box.ciphertext + box.tag).base64EncodedString(), iv: Data(nonce).base64EncodedString())
+    }
+
+    public func decryptData(ciphertext: String, iv: String) throws -> Data {
+        guard let joined = Data(base64Encoded: ciphertext),
+              let ivData = Data(base64Encoded: iv),
+              joined.count >= 16 else { throw CryptoError.badBase64 }
+        let box = try AES.GCM.SealedBox(nonce: AES.GCM.Nonce(data: ivData),
+                                        ciphertext: joined.prefix(joined.count - 16), tag: joined.suffix(16))
+        return try AES.GCM.open(box, using: key)
+    }
+
     public func decrypt(ciphertext: String, iv: String) throws -> String {
         guard let joined = Data(base64Encoded: ciphertext),
               let ivData = Data(base64Encoded: iv),

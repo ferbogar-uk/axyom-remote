@@ -33,7 +33,34 @@ public struct PendingPlan: Equatable, Sendable, Identifiable {
     public var filePath: String?
 }
 
+/// A git commit the agent proposes (developer_git_commit_proposal), waiting for you.
+public struct PendingCommit: Equatable, Sendable, Identifiable {
+    public var id: String              // proposalId, used to answer
+    public var files: [String]
+    public var message: String
+    public var reasoning: String
+}
+
 public enum PendingPrompts {
+    /// Commit proposals with no response yet (auto-approved ones are skipped).
+    public static func commits(in items: [TranscriptItem]) -> [PendingCommit] {
+        var found: [PendingCommit] = []
+        var answered: Set<String> = []
+        visitAll(items) { object in
+            guard let type = object["type"]?.string, let id = object["proposalId"]?.string else { return }
+            if type == "git_commit_proposal_response" || type == "git_commit_response" { answered.insert(id); return }
+            guard type == "git_commit_proposal" else { return }
+            if object["autoApproved"]?.bool == true { answered.insert(id) }
+            if let status = object["status"]?.string, status != "pending" { answered.insert(id) }
+            guard !found.contains(where: { $0.id == id }) else { return }
+            var files: [String] = []
+            if case .array(let a)? = object["filesToStage"] { files = a.compactMap { $0.string } }
+            found.append(PendingCommit(id: id, files: files, message: object["commitMessage"]?.string ?? "",
+                                       reasoning: object["reasoning"]?.string ?? ""))
+        }
+        return found.filter { !answered.contains($0.id) }
+    }
+
     /// AskUserQuestion requests with no answer yet, oldest first.
     public static func questions(in items: [TranscriptItem]) -> [PendingQuestion] {
         var found: [PendingQuestion] = []
