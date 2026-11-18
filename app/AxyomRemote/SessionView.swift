@@ -19,6 +19,9 @@ struct SessionView: View {
     @State private var choices: [String: [String: Set<String>]] = [:]   // questionId -> question -> labels
     @State private var planFeedback: [String: String] = [:]
     @State private var conversation = false
+    @State private var phase: ConversationPhase = .idle
+    @State private var lastReply: String?
+    @State private var waitStarted = Date()
     @StateObject private var listener = SpeechListener()
     @StateObject private var voice = ReplySpeaker()
     @FocusState private var typing: Bool
@@ -62,8 +65,7 @@ struct SessionView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    conversation.toggle()
-                    if !conversation { voice.stop() }
+                    if conversation { endConversation() } else { startConversation() }
                 } label: {
                     Image(systemName: conversation ? "waveform.circle.fill" : "waveform.circle")
                         .foregroundStyle(conversation ? Theme.amber : Theme.text)
@@ -82,10 +84,73 @@ struct SessionView: View {
         .onChange(of: listener.listening) { was, now in
             guard was, !now else { return }
             let heard = listener.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !heard.isEmpty else { return }
-            if conversation { Task { await send(heard, source: "voice") } } else { draft = heard }
+            if conversation {
+                guard !heard.isEmpty else { phase = .idle; return }
+                phase = .waiting
+                waitStarted = Date()
+                Task { await send(heard, source: "voice") }
+            } else if !heard.isEmpty {
+                draft = heard
+            }
+        }
+        // Reply finished being read aloud: open the microphone again.
+        .onChange(of: voice.speaking) { was, now in
+            guard was, !now, conversation, phase == .speaking else { return }
+            listenAgain()
+        }
+        // Agent finished but said nothing readable (only tools): don't hang in "waiting".
+        .onChange(of: session?.isExecuting ?? false) { was, now in
+            guard was, !now, conversation, phase == .waiting else { return }
+            Task {
+                try? await Task.sleep(nanoseconds: 9_000_000_000)
+                if conversation, phase == .waiting { listenAgain() }
+            }
+        }
+        .overlay {
+            if conversation {
+                ConversationPanel(
+                    phase: phase,
+                    heard: listener.transcript,
+                    lastReply: lastReply,
+                    problem: listener.problem ?? actionError,
+                    onTapMain: tapMain,
+                    onEnd: endConversation)
+                .transition(.opacity)
+            }
         }
         .onDisappear { listener.stop(); voice.stop() }
+    }
+
+    // MARK: Conversation loop
+
+    private func startConversation() {
+        typing = false
+        voice.stop()
+        conversation = true
+        listenAgain()
+    }
+
+    private func endConversation() {
+        conversation = false
+        phase = .idle
+        listener.stop()
+        voice.stop()
+    }
+
+    private func listenAgain() {
+        guard conversation else { return }
+        phase = .listening
+        if !listener.listening { listener.toggle(autoStop: true) }
+    }
+
+    /// Main circle: send now while listening, interrupt while speaking, talk when idle.
+    private func tapMain() {
+        switch phase {
+        case .listening: listener.stop()
+        case .speaking: voice.stop(); listenAgain()
+        case .idle: listenAgain()
+        case .waiting: break
+        }
     }
 
     // MARK: Composer
@@ -350,11 +415,22 @@ struct SessionView: View {
             let known = Set(allItems.map(\.id))
             let added = fresh.filter { !known.contains($0.id) }
             guard !added.isEmpty else { continue }
+            // Build the chat from ALL rows before and after: a reply's text is often
+            // split across rows (deltas + completion), so building from only the new
+            // rows found nothing to say and the reply was never read aloud.
+            let provider = session?.provider ?? ""
+            let before = ChatLines.build(allItems, provider: provider).filter { !$0.mine }.map(\.text)
             allItems.append(contentsOf: added)
             if added.contains(where: { $0.direction == "output" }) { notice = nil }
             if conversation {
-                let spoken = ChatLines.build(added, provider: session?.provider ?? "").filter { !$0.mine }.map(\.text)
-                voice.speak(spoken.map { $0.count > 600 ? String($0.prefix(600)) + "…" : $0 })
+                let after = ChatLines.build(allItems, provider: provider).filter { !$0.mine }.map(\.text)
+                let spoken = Array(after.dropFirst(before.count))
+                if !spoken.isEmpty {
+                    if listener.listening { listener.stop() }
+                    lastReply = spoken.last
+                    phase = .speaking
+                    voice.speak(spoken.map { $0.count > 600 ? String($0.prefix(600)) + "…" : $0 })
+                }
             }
         }
     }

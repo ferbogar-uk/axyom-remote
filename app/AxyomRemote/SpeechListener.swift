@@ -1,10 +1,16 @@
 import Foundation
 import AVFoundation
 import Speech
+import AxyomRemoteCore
 
 /// Listens in Portuguese (Brazilian first, then European). Uses Apple's
 /// on-device recognizer when the iPhone has the language downloaded; otherwise
 /// it uses Apple's speech servers and says so on screen (`onDevice == false`).
+///
+/// A pause makes iOS start a new phrase (or end the recognition task). The text
+/// already heard is kept and the new phrase is added after it (TranscriptJoiner),
+/// and a finished task is restarted while the user is still talking, so a pause
+/// never wipes what was said.
 @MainActor
 final class SpeechListener: ObservableObject {
     @Published var transcript = ""
@@ -14,6 +20,7 @@ final class SpeechListener: ObservableObject {
     @Published var onDevice = true
 
     private var recognizer: SFSpeechRecognizer?
+    private var joiner = TranscriptJoiner()
 
     /// Portuguese recognizer: on-device if any variant supports it, else the first available one.
     private static func pickRecognizer() -> SFSpeechRecognizer? {
@@ -27,7 +34,8 @@ final class SpeechListener: ObservableObject {
     private var silenceTimer: Timer?
     private var autoStop = false
     /// Seconds of silence after speech that end listening when auto-stop is on.
-    var silenceSeconds: TimeInterval = 1.8
+    /// 2.5 s, the value AVA settled on: shorter cut people off mid-thought.
+    var silenceSeconds: TimeInterval = 2.5
 
     func toggle(autoStop: Bool = false) {
         if listening { stop() } else { self.autoStop = autoStop; start() }
@@ -36,6 +44,7 @@ final class SpeechListener: ObservableObject {
     func start() {
         problem = nil
         transcript = ""
+        joiner = TranscriptJoiner()
         SFSpeechRecognizer.requestAuthorization { status in
             DispatchQueue.main.async {
                 guard status == .authorized else {
@@ -63,30 +72,46 @@ final class SpeechListener: ObservableObject {
             // playAndRecord so the same session can read the agent's reply aloud afterwards.
             try audio.setCategory(.playAndRecord, mode: .default, options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
             try audio.setActive(true, options: .notifyOthersOnDeactivation)
-            let request = SFSpeechAudioBufferRecognitionRequest()
-            request.requiresOnDeviceRecognition = onDevice
-            request.shouldReportPartialResults = true
-            self.request = request
             let input = engine.inputNode
-            input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { buffer, _ in
-                request.append(buffer)
+            input.installTap(onBus: 0, bufferSize: 1024, format: input.outputFormat(forBus: 0)) { [weak self] buffer, _ in
+                // The current request changes when a task is restarted after a pause.
+                Task { @MainActor in self?.request?.append(buffer) }
             }
             engine.prepare()
             try engine.start()
-            task = recognizer.recognitionTask(with: request) { [weak self] result, error in
-                DispatchQueue.main.async {
-                    guard let self else { return }
-                    if let text = result?.bestTranscription.formattedString {
-                        self.transcript = text
-                        self.armSilenceTimer()
-                    }
-                    if error != nil || result?.isFinal == true { self.stop() }
-                }
-            }
             listening = true
+            startTask()
         } catch {
             problem = "Não consegui ligar o microfone."
             stop()
+        }
+    }
+
+    /// One recognition task. When it ends on its own (a long pause, or Apple's
+    /// one-minute server limit) and we are still listening, the text is kept
+    /// and a fresh task continues on the same microphone.
+    private func startTask() {
+        guard let recognizer else { return }
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.requiresOnDeviceRecognition = onDevice
+        request.shouldReportPartialResults = true
+        if #available(iOS 16, *) { request.addsPunctuation = true }
+        self.request = request
+        task = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                if let text = result?.bestTranscription.formattedString {
+                    self.transcript = self.joiner.update(text)
+                    self.armSilenceTimer()
+                }
+                guard error != nil || result?.isFinal == true else { return }
+                self.joiner.commit()
+                self.transcript = self.joiner.text
+                if self.listening {
+                    self.request?.endAudio()
+                    self.startTask()
+                }
+            }
         }
     }
 
@@ -102,10 +127,13 @@ final class SpeechListener: ObservableObject {
         silenceTimer?.invalidate()
         silenceTimer = nil
         guard listening || engine.isRunning else { return }
+        joiner.commit()
+        transcript = joiner.text
         listening = false
         engine.stop()
         engine.inputNode.removeTap(onBus: 0)
         request?.endAudio()
+        task?.cancel()
         request = nil
         task = nil
     }
