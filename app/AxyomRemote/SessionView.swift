@@ -9,6 +9,8 @@ import AxyomRemoteCore
 struct SessionView: View {
     @EnvironmentObject private var model: AppModel
     let sessionId: String
+    /// Open straight into the hands-free voice conversation (home voice button).
+    var startTalking = false
 
     @State private var allItems: [TranscriptItem] = []
     @State private var loading = true
@@ -28,6 +30,7 @@ struct SessionView: View {
     @FocusState private var typing: Bool
     @State private var images: [PromptImage] = []
     @State private var localQueued: [QueuedPreview] = []
+    @State private var removedQueued: Set<String> = []
     @State private var pendingModel: String?
     @State private var expandedSteps: Set<String> = []
     @State private var pendingEffort: String?
@@ -133,7 +136,15 @@ struct SessionView: View {
                 .accessibilityLabel("Mais opções")
             }
         }
-        .task { await fullLoad(); try? await model.client?.markRead(sessionId: sessionId) }
+        .task {
+            if allItems.isEmpty {
+                let cached = model.cache.loadTranscript(sessionId: sessionId)
+                if !cached.isEmpty { allItems = cached; loading = false }
+            }
+            if startTalking && !conversation { startConversation() }
+            await fullLoad()
+            try? await model.client?.markRead(sessionId: sessionId)
+        }
         .task(id: sessionId) { await live() }
         .task(id: sessionId) { await poll() }
         .refreshable { await fullLoad() }
@@ -388,7 +399,7 @@ struct SessionView: View {
         let asked = Set(allItems.filter { $0.direction == "input" }.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) })
         var out = session?.queued ?? []
         for q in localQueued where !out.contains(where: { $0.id == q.id || $0.text == q.text }) { out.append(q) }
-        return out.filter { !asked.contains($0.text) }
+        return out.filter { !asked.contains($0.text) && !removedQueued.contains($0.id) }
     }
 
     @ViewBuilder private var queueTray: some View {
@@ -399,6 +410,9 @@ struct SessionView: View {
                         Image(systemName: "clock").font(.footnote).foregroundStyle(Theme.muted)
                         Text(q.text).font(.subheadline).foregroundStyle(Theme.textSoft).lineLimit(1)
                         Spacer(minLength: 6)
+                        Button("Anular") { removeQueued(q) }
+                            .font(.footnote).foregroundStyle(Theme.muted)
+                            .disabled(busyId != nil)
                         Button("Enviar agora") { sendNow() }
                             .font(.footnote.weight(.semibold)).foregroundStyle(Theme.text)
                             .padding(.horizontal, 10).frame(height: 30)
@@ -411,6 +425,26 @@ struct SessionView: View {
             .padding(12)
             .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.border, lineWidth: 1))
+        }
+    }
+
+    /// Take a queued message back before it runs. The PC confirms by
+    /// republishing its queue; until then the row is hidden here.
+    private func removeQueued(_ q: QueuedPreview) {
+        guard let client = model.client else { return }
+        Task {
+            busyId = "remove"
+            do {
+                try await client.removeQueued(sessionId: sessionId, promptId: q.id, targetDeviceId: target)
+                localQueued.removeAll { $0.id == q.id }
+                removedQueued.insert(q.id)
+                if draft.isEmpty { draft = q.text }
+                notice = "Mensagem tirada da fila. Ficou na caixa para a editares."
+                Prefs.tap()
+            } catch {
+                actionError = "Não consegui falar com o PC. Tenta outra vez."
+            }
+            busyId = nil
         }
     }
 
@@ -471,6 +505,17 @@ struct SessionView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contextMenu { copyButton(item.text) }
         } else {
+        VStack(alignment: .trailing, spacing: 6) {
+        if let pics = model.sentImages[sessionId + "|" + item.text], !pics.isEmpty {
+            HStack(spacing: 6) {
+                ForEach(Array(pics.enumerated()), id: \.offset) { _, data in
+                    if let ui = UIImage(data: data) {
+                        Image(uiImage: ui).resizable().scaledToFill().frame(width: 72, height: 72)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                }
+            }
+        }
         Text(item.text)
             .font(.body).foregroundStyle(mine ? Theme.text : Theme.textSoft)
             .textSelection(.enabled)
@@ -478,7 +523,8 @@ struct SessionView: View {
             .background(mine ? Theme.amberFill : .clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(mine ? Theme.amberBorder : .clear, lineWidth: 1))
             .contextMenu { copyButton(item.text) }
-            .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
         }
     }
 
@@ -693,6 +739,11 @@ struct SessionView: View {
             let wasBusy = busy
             let id = try await client.sendPrompt(sessionId: sessionId, text: trimmed, images: images, options: promptOptions, source: source, targetDeviceId: target)
             Prefs.tap()
+            if !images.isEmpty {
+                // Same wording the core uses when an image goes without text.
+                let shown = trimmed.isEmpty ? (images.count == 1 ? "Vê a imagem em anexo." : "Vê as imagens em anexo.") : trimmed
+                model.sentImages[sessionId + "|" + shown] = images.map(\.data)
+            }
             if wasBusy && !now { localQueued.append(QueuedPreview(id: id, text: trimmed)) }
             if now && wasBusy { try await client.sendNow(sessionId: sessionId, targetDeviceId: target) }
             draft = ""
@@ -728,6 +779,7 @@ struct SessionView: View {
         do {
             allItems = try await client.loadTranscript(sessionId: sessionId)
             failure = nil
+            model.cache.saveTranscript(allItems, sessionId: sessionId)
         } catch {
             if allItems.isEmpty { failure = "Não consegui ler esta sessão. Puxa para baixo para tentar outra vez." }
         }
@@ -779,6 +831,7 @@ struct SessionView: View {
         let before = ChatLines.build(allItems, provider: provider).filter { !$0.mine }.map(\.text)
         allItems.append(contentsOf: added)
         allItems.sort { $0.sequence < $1.sequence }
+        model.cache.saveTranscript(allItems, sessionId: sessionId)
         if added.contains(where: { $0.direction == "output" }) { notice = nil }
         let id = sessionId
         Task { try? await model.client?.markRead(sessionId: id) }

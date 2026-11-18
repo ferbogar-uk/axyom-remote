@@ -12,6 +12,11 @@ final class AppModel: ObservableObject {
     @Published var pairingError: String?
 
     private(set) var client: RemoteClient?
+    /// Last sessions and conversations, kept on the phone for offline viewing.
+    let cache = OfflineCache(directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("axyom-cache", isDirectory: true))
+    /// Images you sent, by session and message text, to show as thumbnails (this run of the app).
+    var sentImages: [String: [Data]] = [:]
     private var attention = AttentionWatcher()
 
     init() {
@@ -55,6 +60,7 @@ final class AppModel: ObservableObject {
         client = nil
         Task { await old?.stop() }
         PairingKeychain.delete()
+        cache.clear()
         pairing = nil
         snapshot = RemoteClient.Snapshot()
     }
@@ -104,6 +110,7 @@ final class AppModel: ObservableObject {
             await remote.setOnChange { [weak self] snap in
                 Task { @MainActor in self?.apply(snap) }
             }
+            await remote.useCache(cache)
             await remote.start()
         }
     }

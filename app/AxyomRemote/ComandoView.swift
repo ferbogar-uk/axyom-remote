@@ -10,11 +10,12 @@ struct ComandoView: View {
     @State private var project: String?
     @State private var showNew = false
     @State private var showVoice = false
+    @State private var path: [String] = []
     @State private var showSettings = false
     @State private var search = ""
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             let board = filtered(model.board(project: project))
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
@@ -33,7 +34,9 @@ struct ComandoView: View {
             }
             .scrollIndicators(.hidden)
             .refreshable { try? await model.client?.refreshIndex() }
-            .navigationDestination(for: String.self) { SessionView(sessionId: $0) }
+            .navigationDestination(for: String.self) { id in
+                SessionView(sessionId: id.hasPrefix("talk:") ? String(id.dropFirst(5)) : id, startTalking: id.hasPrefix("talk:"))
+            }
             .safeAreaInset(edge: .bottom) { bottomBar }
             .toolbar(.hidden, for: .navigationBar)
             .background(Theme.background)
@@ -190,6 +193,17 @@ struct ComandoView: View {
         .card()
     }
 
+    /// Voice button: open the session that is waiting for you (else the latest)
+    /// straight into the hands-free conversation; with no session, voice commands.
+    private func talk() {
+        let board = model.board()
+        if let s = board.waiting.first ?? board.working.first ?? board.recent.first {
+            path.append("talk:" + s.id)
+        } else {
+            showVoice = true
+        }
+    }
+
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
@@ -242,13 +256,17 @@ struct ComandoView: View {
                 .background(Theme.elevated, in: Capsule())
             }
             .disabled(!pcOnline)
-            Button { showVoice = true } label: {
+            Button { talk() } label: {
                 Image(systemName: "waveform").font(.title3.weight(.bold)).foregroundStyle(Theme.onAccent)
                     .frame(width: 48, height: 48).background(Theme.accent, in: Circle())
                     .opacity(pcOnline ? 1 : 0.45)
             }
             .disabled(!pcOnline)
-            .accessibilityLabel("Falar com o AXYOM")
+            .accessibilityLabel("Conversar por voz")
+            .contextMenu {
+                Button { talk() } label: { Label("Conversar com a sessão", systemImage: "waveform") }
+                Button { showVoice = true } label: { Label("Comandos de voz (nova sessão…)", systemImage: "mic") }
+            }
         }
         .padding(10)
         .background(Theme.surface, in: Capsule())

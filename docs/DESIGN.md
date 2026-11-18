@@ -124,8 +124,7 @@ Update (2026-11-18, 13:00):
 - Queue / send now: while the agent works, tapping send queues the message
   (shown above the composer with "Enviar agora"); holding the send button offers
   "Pôr na fila" or "Enviar agora". Send now = stop the turn, then run the queue,
-  as the desktop's own send-now does. No "undo send": once the PC has the
-  prompt in its queue the phone cannot remove it (would need a desktop change).
+  as the desktop's own send-now does. "Undo send" came later as "Anular" (request #6).
 
 Update (2026-11-18, 14:10): model and effort picker is live (desktop request #4
 done). The chip lists the models the PC publishes for the session's provider
@@ -149,3 +148,15 @@ Update (2026-11-18, 15:00), autonomous batch 2:
   while it is open) publishes `lastReadAt`; home rows show a dot when unread.
 - Home: pull to refresh (asks the server for the list again).
 - Long-press any message: Copiar.
+
+Update (2026-11-18, 15:30), autonomous batch 3:
+- Offline: the phone keeps the last session list (still encrypted, as the
+  server sent it) and the newest 400 rows of the last 20 opened conversations
+  in its own app folder, so the app opens with something to read without
+  network. Unpairing wipes it.
+- Home voice button: opens the session waiting for you (else the latest) straight
+  into the hands-free conversation; long-press for the old voice commands.
+- Queue: "Anular" takes a queued message back (desktop request #6, done) and puts
+  its text back in the box to edit.
+- Thumbnails of the images you sent appear above your message (kept in memory
+  while the app runs; the transcript itself does not carry them back).
