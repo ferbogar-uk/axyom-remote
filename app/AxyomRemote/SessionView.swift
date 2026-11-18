@@ -41,6 +41,9 @@ struct SessionView: View {
     @State private var matchIndex = 0
     @State private var scrollTarget: String?
     @FocusState private var searchFocused: Bool
+    @State private var lastSharedDraft: String?
+    @State private var draftTask: Task<Void, Never>?
+    @State private var showInfo = false
     @State private var pendingEffort: String?
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showPhotos = false
@@ -159,6 +162,15 @@ struct SessionView: View {
             }
         }
         .safeAreaInset(edge: .top) { if searching { searchBar } }
+        .onChange(of: draft) { _, text in shareDraftSoon(text) }
+        .onChange(of: session?.draftUpdatedAt) { _, _ in
+            // A draft typed on the PC shows up here only if the box is empty.
+            if draft.isEmpty, let shared = session?.draftInput, !shared.isEmpty, shared != lastSharedDraft {
+                draft = shared
+                lastSharedDraft = shared
+            }
+        }
+        .sheet(isPresented: $showInfo) { SessionInfoSheet(sessionId: sessionId, modelName: chosenModel?.name ?? modelLabel).environmentObject(model) }
         .safeAreaInset(edge: .bottom) { composer }
         .background(Theme.background)
         .navigationTitle(session?.title ?? "Sessão")
@@ -181,6 +193,7 @@ struct SessionView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { searching = true; searchFocused = true } label: { Label("Procurar na conversa", systemImage: "magnifyingglass") }
+                    Button { showInfo = true } label: { Label("Informação da sessão", systemImage: "info.circle") }
                     Button { Task { await fullLoad() } } label: { Label("Atualizar conversa", systemImage: "arrow.clockwise") }
                     Button { startConversation() } label: { Label("Conversa por voz", systemImage: "waveform") }
                     Button(role: .destructive) { Task { await stop() } } label: { Label("Parar o agente", systemImage: "stop.circle") }
@@ -196,6 +209,10 @@ struct SessionView: View {
                 if !cached.isEmpty { allItems = cached; loading = false }
             }
             if startTalking && !conversation { startConversation() }
+            if draft.isEmpty, let shared = session?.draftInput, !shared.isEmpty {
+                draft = shared
+                lastSharedDraft = shared
+            }
             await fullLoad()
             try? await model.client?.markRead(sessionId: sessionId)
         }
@@ -579,6 +596,18 @@ struct SessionView: View {
             .contextMenu { copyButton(item.text) }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    /// Send the draft to the PC 1.2 s after you stop typing (and "" once it is sent).
+    private func shareDraftSoon(_ text: String) {
+        draftTask?.cancel()
+        guard text != lastSharedDraft, let client = model.client else { return }
+        let id = sessionId
+        draftTask = Task {
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard !Task.isCancelled else { return }
+            if (try? await client.saveDraft(sessionId: id, text: text)) != nil { lastSharedDraft = text }
         }
     }
 

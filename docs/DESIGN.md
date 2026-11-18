@@ -177,3 +177,11 @@ Update (2026-11-18, 16:30), autonomous batch 5:
   button appears and takes you to the end.
 - Accessibility: every icon-only button has a VoiceOver name; chips, buttons and
   fields grow with large text (minimum heights instead of fixed ones).
+
+Update (2026-11-18, 17:00), autonomous batch 6:
+- Drafts shared with the PC: what you type is saved 1.2 s after you stop as
+  `draftInput` in the encrypted client metadata (every other field in that blob
+  kept; an unreadable blob is never overwritten). A draft typed on the PC fills
+  the box when it is empty.
+- Session info ("…" > Informação da sessão): project, folder, PC, agent, model,
+  effort, state, messages, queue, created, last activity, copy the session id.
