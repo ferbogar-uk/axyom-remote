@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UserNotifications
 import AxyomRemoteCore
 
 /// Thin glue between the iOS app and `AxyomRemoteCore`. Anything that can be
@@ -11,6 +12,7 @@ final class AppModel: ObservableObject {
     @Published var pairingError: String?
 
     private(set) var client: RemoteClient?
+    private var attention = AttentionWatcher()
 
     init() {
         if let saved = PairingKeychain.load() { connect(saved) }
@@ -52,7 +54,30 @@ final class AppModel: ObservableObject {
         snapshot = RemoteClient.Snapshot()
     }
 
+    private func apply(_ snap: RemoteClient.Snapshot) {
+        snapshot = snap
+        for s in attention.update(snap.sessions) { notifyWaiting(s) }
+    }
+
+    /// Local notification when a session starts waiting for you. It only fires
+    /// while the app is running (open or recently in the background): iOS
+    /// suspends the connection soon after. Real push needs the server (docs/REQUESTS-TO-DESKTOP.md).
+    private func notifyWaiting(_ s: FleetSession) {
+        guard UIApplication.shared.applicationState != .active else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "À espera de ti"
+        content.body = "\(s.title) · \(s.projectName)"
+        content.sound = .default
+        content.userInfo = ["sessionId": s.id]
+        UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "wait-\(s.id)", content: content, trigger: nil))
+    }
+
+    private func askNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+    }
+
     private func connect(_ payload: PairingPayload) {
+        askNotificationPermission()
         guard let crypto = try? SyncCrypto(seed: payload.seed, memberId: payload.member) else {
             pairingError = "Não consegui preparar a cifra com este código."
             return
@@ -72,7 +97,7 @@ final class AppModel: ObservableObject {
         pairing = payload
         Task {
             await remote.setOnChange { [weak self] snap in
-                Task { @MainActor in self?.snapshot = snap }
+                Task { @MainActor in self?.apply(snap) }
             }
             await remote.start()
         }

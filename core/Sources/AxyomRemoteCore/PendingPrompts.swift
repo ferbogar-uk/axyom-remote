@@ -10,7 +10,79 @@ public struct PendingPermission: Equatable, Sendable, Identifiable {
     public var warnings: [String]
 }
 
+/// A question the agent asked (AskUserQuestion), waiting for an answer.
+public struct PendingQuestion: Equatable, Sendable, Identifiable {
+    public struct Option: Equatable, Sendable, Hashable {
+        public var label: String
+        public var description: String
+    }
+    public struct Question: Equatable, Sendable, Hashable {
+        public var question: String
+        public var header: String
+        public var options: [Option]
+        public var multiSelect: Bool
+    }
+    public var id: String              // questionId, used to answer
+    public var questions: [Question]
+}
+
+/// A plan the agent wants approved before it starts editing (ExitPlanMode).
+public struct PendingPlan: Equatable, Sendable, Identifiable {
+    public var id: String              // requestId, used to answer
+    public var summary: String
+    public var filePath: String?
+}
+
 public enum PendingPrompts {
+    /// AskUserQuestion requests with no answer yet, oldest first.
+    public static func questions(in items: [TranscriptItem]) -> [PendingQuestion] {
+        var found: [PendingQuestion] = []
+        var answered: Set<String> = []
+        visitAll(items) { object in
+            guard let type = object["type"]?.string, let id = object["questionId"]?.string else { return }
+            if type == "ask_user_question_response" { answered.insert(id); return }
+            guard type == "ask_user_question_request" else { return }
+            if let status = object["status"]?.string, status != "pending" { answered.insert(id) }
+            guard !found.contains(where: { $0.id == id }) else { return }
+            var qs: [PendingQuestion.Question] = []
+            if case .array(let list)? = object["questions"] {
+                for q in list {
+                    var opts: [PendingQuestion.Option] = []
+                    if case .array(let o)? = q["options"] {
+                        opts = o.compactMap { x in x["label"]?.string.map { PendingQuestion.Option(label: $0, description: x["description"]?.string ?? "") } }
+                    }
+                    qs.append(.init(question: q["question"]?.string ?? "", header: q["header"]?.string ?? "",
+                                    options: opts, multiSelect: q["multiSelect"]?.bool ?? false))
+                }
+            }
+            found.append(PendingQuestion(id: id, questions: qs))
+        }
+        return found.filter { !answered.contains($0.id) }
+    }
+
+    /// Plans waiting for approval, oldest first.
+    public static func plans(in items: [TranscriptItem]) -> [PendingPlan] {
+        var found: [PendingPlan] = []
+        var answered: Set<String> = []
+        visitAll(items) { object in
+            guard let type = object["type"]?.string, let id = object["requestId"]?.string else { return }
+            if type == "exit_plan_mode_response" { answered.insert(id); return }
+            guard type == "exit_plan_mode_request" else { return }
+            if let status = object["status"]?.string, status != "pending" { answered.insert(id) }
+            guard !found.contains(where: { $0.id == id }) else { return }
+            found.append(PendingPlan(id: id, summary: object["planSummary"]?.string ?? "", filePath: object["planFilePath"]?.string))
+        }
+        return found.filter { !answered.contains($0.id) }
+    }
+
+    private static func visitAll(_ items: [TranscriptItem], _ visit: ([String: JSONValue]) -> Void) {
+        for item in items {
+            guard let data = item.raw.data(using: .utf8),
+                  let value = try? JSONDecoder().decode(JSONValue.self, from: data) else { continue }
+            walk(value, depth: 0, visit)
+        }
+    }
+
     /// Permission requests with no answer yet, oldest first. A request is
     /// answered when a `permission_response` with the same id exists, or when
     /// its own status says it is no longer pending.

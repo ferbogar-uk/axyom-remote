@@ -15,9 +15,13 @@ final class SpeechListener: ObservableObject {
     private let engine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
+    private var silenceTimer: Timer?
+    private var autoStop = false
+    /// Seconds of silence after speech that end listening when auto-stop is on.
+    var silenceSeconds: TimeInterval = 1.8
 
-    func toggle() {
-        if listening { stop() } else { start() }
+    func toggle(autoStop: Bool = false) {
+        if listening { stop() } else { self.autoStop = autoStop; start() }
     }
 
     func start() {
@@ -49,7 +53,8 @@ final class SpeechListener: ObservableObject {
         }
         do {
             let audio = AVAudioSession.sharedInstance()
-            try audio.setCategory(.record, mode: .measurement, options: .duckOthers)
+            // playAndRecord so the same session can read the agent's reply aloud afterwards.
+            try audio.setCategory(.playAndRecord, mode: .default, options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
             try audio.setActive(true, options: .notifyOthersOnDeactivation)
             let request = SFSpeechAudioBufferRecognitionRequest()
             request.requiresOnDeviceRecognition = true
@@ -64,7 +69,10 @@ final class SpeechListener: ObservableObject {
             task = recognizer.recognitionTask(with: request) { [weak self] result, error in
                 DispatchQueue.main.async {
                     guard let self else { return }
-                    if let text = result?.bestTranscription.formattedString { self.transcript = text }
+                    if let text = result?.bestTranscription.formattedString {
+                        self.transcript = text
+                        self.armSilenceTimer()
+                    }
                     if error != nil || result?.isFinal == true { self.stop() }
                 }
             }
@@ -75,7 +83,17 @@ final class SpeechListener: ObservableObject {
         }
     }
 
+    private func armSilenceTimer() {
+        guard autoStop, listening else { return }
+        silenceTimer?.invalidate()
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: silenceSeconds, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.stop() }
+        }
+    }
+
     func stop() {
+        silenceTimer?.invalidate()
+        silenceTimer = nil
         guard listening || engine.isRunning else { return }
         listening = false
         engine.stop()

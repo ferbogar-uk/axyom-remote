@@ -70,10 +70,30 @@ public struct SessionIndexEntry: Codable, Equatable, Sendable {
     public var updatedAt: Double
     public var isExecuting: Bool?
     public var queuedPromptCount: Int?
+    public var encryptedQueuedPrompts: [EncryptedQueuedPrompt]?
     public var hasPendingPrompt: Bool?
     public var encryptedClientMetadata: String?
     public var clientMetadataIv: String?
     public var lastReadAt: Double?
+}
+
+/// A prompt waiting in a session's queue (IndexEncryptedQueuedPrompt in
+/// collab-protocol). The phone sends a reply by putting one of these on the
+/// session's index entry; the desktop ingests it into its queued_prompts table.
+public struct EncryptedQueuedPrompt: Codable, Equatable, Sendable {
+    public var id: String
+    public var encryptedPrompt: String
+    public var iv: String
+    public var timestamp: Double
+    public var source: String?
+
+    public init(id: String, encryptedPrompt: String, iv: String, timestamp: Double, source: String? = nil) {
+        self.id = id
+        self.encryptedPrompt = encryptedPrompt
+        self.iv = iv
+        self.timestamp = timestamp
+        self.source = source
+    }
 }
 
 public struct DeviceInfo: Codable, Equatable, Sendable {
@@ -180,6 +200,8 @@ public enum ClientMessage: Equatable, Sendable {
     case createSessionRequest(CreateSessionRequest, targetDeviceId: String?)
     /// Generic control message relayed to the PC (cancel, prompt_response, ...). The payload travels as plain JSON.
     case sessionControl(sessionId: String, messageType: String, payload: JSONValue?, sentByDeviceId: String, targetDeviceId: String?, timestamp: Double)
+    /// Write (part of) a session's index entry. Omitted fields keep their stored value.
+    case indexUpdate(SessionIndexEntry)
     case ping
 
     public func encoded() throws -> String {
@@ -205,6 +227,8 @@ public enum ClientMessage: Equatable, Sendable {
             if let payload { m["payload"] = payload }
             if let target { m["targetDeviceId"] = .string(target) }
             object = ["type": .string("sessionControl"), "message": .object(m)]
+        case .indexUpdate(let entry):
+            object = ["type": .string("indexUpdate"), "session": try JSONValue.from(entry)]
         case .ping:
             object = ["type": .string("ping")]
         }

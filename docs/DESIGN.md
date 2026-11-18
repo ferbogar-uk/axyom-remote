@@ -59,3 +59,21 @@ The app now uses the AXYOM brand pack (Corrected edition, direction 01): dark to
 Logo update (2026-11-18): Ricardo wants the dimensional (3D/metallic) logo in the app, not the flat one. The Comando header uses axyom-symbol-dark and the pairing screen uses axyom-lockup-dark from the brand pack. The brand guide recommends flat artwork at small sizes and the dimensional version only above 240 px wide; the header symbol is small, so check how it reads on the iPhone.
 
 Update (2026-11-18): the session screen now has Approve once / Deny for tool-permission prompts and a Stop button. They send the same sessionControl messages the desktop handles (prompt_response, cancel) and are covered by core tests. Not tested against a real desktop yet. Still not built: replying with text (needs the queued-prompt index write), plan approval, question answers, voice conversation, notifications.
+
+Update (2026-11-18, later): the session screen is now complete for everyday use.
+- Reply by text: `RemoteClient.sendPrompt` writes one encrypted queued prompt on
+  the session's index entry (`indexUpdate`, same shape as the desktop's own iOS
+  client in packages/ios SessionIndexUpdates.prompt) and then sends a `prompt`
+  sessionControl to nudge the desktop. Works with the PC offline (it runs when it connects).
+- Answer the agent's questions (AskUserQuestion, options, multi-select) and
+  approve/reject plans (ExitPlanMode, optional feedback).
+- New messages arrive every 4 s (incremental syncRequest after the last sequence).
+- Voice conversation (decided: tap button, no wake word, iPhone system voice):
+  the waveform button turns it on; you tap the mic and talk, it stops after
+  ~1.8 s of silence, sends, and reads the agent's reply aloud (AVSpeechSynthesizer, pt-PT).
+- The home voice button can now reply, approve and deny (it targets the
+  session waiting for you, shown before you confirm).
+- Local notification when a session starts waiting, only while the app is running.
+Not tested against a real desktop yet. Still not built: real push with the
+phone locked (needs the server, request #2), plan usage (request #3),
+attachments/images in replies, git commit prompt, Azure voice.
