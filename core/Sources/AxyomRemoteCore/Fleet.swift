@@ -15,8 +15,10 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
     public var lastActivity: Date
     /// The index entry's project ciphertext, used to find which PC holds the project.
     public var encryptedProjectId: String = ""
+    /// Prompts waiting in this session's queue, decrypted (oldest first).
+    public var queued: [QueuedPreview] = []
 
-    public init(id: String, title: String, projectId: String, provider: String, model: String? = nil, isExecuting: Bool = false, hasPendingPrompt: Bool = false, queuedPromptCount: Int = 0, isArchived: Bool = false, hostDeviceId: String? = nil, lastActivity: Date, encryptedProjectId: String = "") {
+    public init(id: String, title: String, projectId: String, provider: String, model: String? = nil, isExecuting: Bool = false, hasPendingPrompt: Bool = false, queuedPromptCount: Int = 0, isArchived: Bool = false, hostDeviceId: String? = nil, lastActivity: Date, encryptedProjectId: String = "", queued: [QueuedPreview] = []) {
         self.id = id
         self.title = title
         self.projectId = projectId
@@ -29,6 +31,7 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
         self.hostDeviceId = hostDeviceId
         self.lastActivity = lastActivity
         self.encryptedProjectId = encryptedProjectId
+        self.queued = queued
     }
 
     /// Folder name of the project ("C:\…\AXYOM - AI Development OS" -> "AXYOM - AI Development OS").
@@ -62,7 +65,10 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
             isArchived: entry.isArchived ?? false,
             hostDeviceId: entry.hostDeviceId,
             lastActivity: Date(timeIntervalSince1970: max(entry.lastMessageAt, entry.updatedAt) / 1000),
-            encryptedProjectId: entry.encryptedProjectId
+            encryptedProjectId: entry.encryptedProjectId,
+            queued: (entry.encryptedQueuedPrompts ?? []).compactMap { q in
+                (try? crypto.decrypt(ciphertext: q.encryptedPrompt, iv: q.iv)).map { QueuedPreview(id: q.id, text: $0) }
+            }
         )
     }
 }
@@ -110,4 +116,11 @@ public struct FleetBoard: Equatable, Sendable {
         let parts = path.split(whereSeparator: { $0 == "/" || $0 == "\\" })
         return parts.last.map(String.init) ?? path
     }
+}
+
+/// A prompt waiting in a session's queue.
+public struct QueuedPreview: Equatable, Sendable, Identifiable {
+    public var id: String
+    public var text: String
+    public init(id: String, text: String) { self.id = id; self.text = text }
 }

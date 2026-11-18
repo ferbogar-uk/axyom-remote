@@ -146,7 +146,7 @@ public actor RemoteClient {
                     if let msg = try? ServerMessage.decode(text) { handleIndex(msg) }
                 }
             } catch {
-                snapshot.lastError = "\(error)"
+                snapshot.lastError = ConnectionMessage.from(error)
             }
             pinger?.cancel(); pinger = nil
             index = nil
@@ -216,7 +216,8 @@ public actor RemoteClient {
             guard let u = PlanUsage.decrypt(deviceId: deviceId, encryptedUsage: encrypted, usageIv: iv, crypto: crypto) else { return }
             usage[deviceId] = u
         case .error(let code, let message, _):
-            snapshot.lastError = "\(code): \(message)"
+            snapshot.lastError = code.lowercased().contains("auth") ? "O servidor recusou este iPhone. Emparelha de novo." : "O servidor devolveu um erro"
+            _ = message
         default:
             return
         }
@@ -337,6 +338,15 @@ public actor RemoteClient {
             "response": .object(response),
         ])
         try await sendControl(sessionId: sessionId, type: "prompt_response", payload: payload, targetDeviceId: targetDeviceId)
+    }
+
+    /// "Send now": stop the turn that is running, then nudge the PC to run the
+    /// queue straight away, so the prompt you just queued runs next (the desktop
+    /// does the same for its own "send now" button: stop, then drive the queue).
+    public func sendNow(sessionId: String, targetDeviceId: String?) async throws {
+        try await sendControl(sessionId: sessionId, type: "cancel", payload: nil, targetDeviceId: targetDeviceId)
+        await sleep(0.8)
+        try await sendControl(sessionId: sessionId, type: "prompt", payload: nil, targetDeviceId: targetDeviceId)
     }
 
     /// Ask the PC to stop what the session is doing.
