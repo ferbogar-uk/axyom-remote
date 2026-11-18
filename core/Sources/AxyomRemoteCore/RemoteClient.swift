@@ -222,6 +222,29 @@ public actor RemoteClient {
         return try await withCheckedThrowingContinuation { pendingCreates[requestId] = $0 }
     }
 
+    /// Answer a tool-permission prompt on the PC. `scope` is once, session, always or always-all.
+    public func respondToPermission(sessionId: String, promptId: String, allow: Bool, scope: String = "once", targetDeviceId: String?) async throws {
+        let payload: JSONValue = .object([
+            "promptType": .string("tool_permission"),
+            "promptId": .string(promptId),
+            "response": .object(["decision": .string(allow ? "allow" : "deny"), "scope": .string(scope)]),
+        ])
+        try await sendControl(sessionId: sessionId, type: "prompt_response", payload: payload, targetDeviceId: targetDeviceId)
+    }
+
+    /// Ask the PC to stop what the session is doing.
+    public func cancel(sessionId: String, targetDeviceId: String?) async throws {
+        try await sendControl(sessionId: sessionId, type: "cancel", payload: nil, targetDeviceId: targetDeviceId)
+    }
+
+    private func sendControl(sessionId: String, type: String, payload: JSONValue?, targetDeviceId: String?) async throws {
+        guard let socket = index else { throw ClientError.notConnected }
+        let message = ClientMessage.sessionControl(sessionId: sessionId, messageType: type, payload: payload,
+                                                   sentByDeviceId: device.deviceId, targetDeviceId: targetDeviceId,
+                                                   timestamp: now().timeIntervalSince1970 * 1000)
+        try await socket.send(message.encoded())
+    }
+
     private func expire(_ requestId: String) {
         pendingCreates.removeValue(forKey: requestId)?.resume(throwing: ClientError.timeout)
     }

@@ -178,6 +178,8 @@ public enum ClientMessage: Equatable, Sendable {
     case indexSyncRequest
     case deviceAnnounce(DeviceInfo)
     case createSessionRequest(CreateSessionRequest, targetDeviceId: String?)
+    /// Generic control message relayed to the PC (cancel, prompt_response, ...). The payload travels as plain JSON.
+    case sessionControl(sessionId: String, messageType: String, payload: JSONValue?, sentByDeviceId: String, targetDeviceId: String?, timestamp: Double)
     case ping
 
     public func encoded() throws -> String {
@@ -195,6 +197,14 @@ public enum ClientMessage: Equatable, Sendable {
             var o: [String: JSONValue] = ["type": .string("createSessionRequest"), "request": try JSONValue.from(request)]
             if let target { o["targetDeviceId"] = .string(target) }
             object = o
+        case .sessionControl(let sessionId, let messageType, let payload, let sentBy, let target, let timestamp):
+            var m: [String: JSONValue] = [
+                "sessionId": .string(sessionId), "messageType": .string(messageType),
+                "timestamp": .number(timestamp), "sentBy": .string("mobile"), "sentByDeviceId": .string(sentBy),
+            ]
+            if let payload { m["payload"] = payload }
+            if let target { m["targetDeviceId"] = .string(target) }
+            object = ["type": .string("sessionControl"), "message": .object(m)]
         case .ping:
             object = ["type": .string("ping")]
         }
