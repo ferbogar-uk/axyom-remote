@@ -10,6 +10,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var pairing: PairingPayload?
     @Published private(set) var snapshot = RemoteClient.Snapshot()
     @Published var pairingError: String?
+    /// The server's Azure voice (nil until asked, or when the server has none).
+    @Published private(set) var voiceStatus: NeuralVoice.Status?
     /// A conversation to open because a notification was tapped.
     @Published var openRequest: String?
 
@@ -37,6 +39,28 @@ final class AppModel: ObservableObject {
         case true?: return "ativo"
         case false?: return "servidor sem chave"
         case nil: return PushBridge.shared.token == nil ? "por ativar" : "a registar"
+        }
+    }
+
+    /// Ask the server whether it has the Azure voice; ReplySpeaker uses it only then.
+    func refreshVoice() async {
+        guard let pairing, let request = NeuralVoice.statusRequest(pairing: pairing) else { return }
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let status = try? JSONDecoder().decode(NeuralVoice.Status.self, from: data) else {
+            voiceStatus = nil
+            ReplySpeaker.neural = nil
+            return
+        }
+        voiceStatus = status
+        guard status.configured, !status.exhausted else { ReplySpeaker.neural = nil; return }
+        ReplySpeaker.neural = { text in
+            let voice = Prefs.azureVoice
+            guard let request = NeuralVoice.ttsRequest(pairing: pairing, text: text, voice: voice.isEmpty ? nil : voice,
+                                                       rateMultiplier: Double(Prefs.speechRateMultiplier)),
+                  let (data, response) = try? await URLSession.shared.data(for: request),
+                  (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else { return nil }
+            return data
         }
     }
 
@@ -88,6 +112,8 @@ final class AppModel: ObservableObject {
         Task { await old?.clearPushToken(); await old?.stop() }
         PairingKeychain.delete()
         cache.clear()
+        ReplySpeaker.neural = nil
+        voiceStatus = nil
         pairing = nil
         snapshot = RemoteClient.Snapshot()
     }
@@ -155,6 +181,7 @@ final class AppModel: ObservableObject {
             await remote.useCache(cache)
             await remote.start()
             if let token = PushBridge.shared.token { await MainActor.run { self.sendPushToken(token) } }
+            await self.refreshVoice()
         }
     }
 }

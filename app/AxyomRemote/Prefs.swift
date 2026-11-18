@@ -9,6 +9,8 @@ enum Prefs {
         static let voiceLanguage = "voiceLanguage"    // pt-BR | pt-PT
         static let speechRate = "speechRate"          // slow | normal | fast
         static let silence = "silenceSeconds"         // 1.5 | 2.0 | 2.5
+        static let voiceEngine = "voiceEngine"        // azure | system
+        static let azureVoice = "azureVoice"          // "" = server default (the desktop's voice)
         static let haptics = "haptics"
         static let notifications = "notifications"
         static let notifyFinished = "notifyFinished"
@@ -28,6 +30,8 @@ enum Prefs {
         default: return 1.08
         }
     }
+    static var voiceEngine: String { d.string(forKey: Key.voiceEngine) ?? "azure" }
+    static var azureVoice: String { d.string(forKey: Key.azureVoice) ?? "" }
     static var haptics: Bool { d.object(forKey: Key.haptics) as? Bool ?? true }
     static var notifications: Bool { d.object(forKey: Key.notifications) as? Bool ?? true }
     static var notifyFinished: Bool { d.object(forKey: Key.notifyFinished) as? Bool ?? true }
