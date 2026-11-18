@@ -40,7 +40,9 @@ final class FakeSocket: SyncSocket, @unchecked Sendable {
 
     var sentTypes: [String] {
         lock.lock(); defer { lock.unlock() }
+        // Keep-alive pings fire fast with the tests' shortened sleep; they are not part of the exchange under test.
         return sent.compactMap { (try? JSONDecoder().decode([String: JSONValue].self, from: Data($0.utf8)))?["type"]?.string }
+            .filter { $0 != "ping" }
     }
 }
 
