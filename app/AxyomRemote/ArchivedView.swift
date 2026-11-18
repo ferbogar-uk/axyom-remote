@@ -25,7 +25,7 @@ struct ArchivedView: View {
                     Spacer(minLength: 8)
                     Button(restoring.contains(s.id) ? "A pedir…" : "Desarquivar") { restore(s) }
                         .font(.footnote.weight(.semibold)).foregroundStyle(Theme.text)
-                        .padding(.horizontal, 10).frame(height: 32)
+                        .padding(.horizontal, 10).frame(minHeight: 32)
                         .background(Theme.elevated, in: Capsule())
                         .buttonStyle(.plain)
                         .disabled(restoring.contains(s.id) || !model.pcStatus.isOnline)

@@ -73,7 +73,7 @@ struct NewSessionSheet: View {
                             Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(Theme.muted)
                         }
                         .font(.subheadline)
-                        .padding(.horizontal, 14).frame(height: 40)
+                        .padding(.horizontal, 14).frame(minHeight: 40)
                         .background(Theme.elevated, in: Capsule())
                     }
                 }

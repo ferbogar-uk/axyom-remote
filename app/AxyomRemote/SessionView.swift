@@ -33,6 +33,14 @@ struct SessionView: View {
     @State private var removedQueued: Set<String> = []
     @State private var pendingModel: String?
     @State private var expandedSteps: Set<String> = []
+    @State private var atBottom = true
+    @State private var unseen = 0
+    @State private var viewportHeight: CGFloat = 800
+    @State private var searching = false
+    @State private var query = ""
+    @State private var matchIndex = 0
+    @State private var scrollTarget: String?
+    @FocusState private var searchFocused: Bool
     @State private var pendingEffort: String?
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showPhotos = false
@@ -81,7 +89,11 @@ struct SessionView: View {
                     }
                     ForEach(rows) { row in
                         switch row {
-                        case .message(let item): bubble(item)
+                        case .message(let item):
+                            bubble(item)
+                                .id(item.id)
+                                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Theme.accent, lineWidth: isCurrentMatch(item.id) ? 2 : 0).padding(-4))
                         case .steps(let steps): stepsRow(steps)
                         }
                     }
@@ -98,14 +110,55 @@ struct SessionView: View {
                     if let notice { Text(notice).font(.footnote).foregroundStyle(Theme.green) }
                     if let actionError { Text(actionError).font(.subheadline).foregroundStyle(Theme.danger).card() }
                     Color.clear.frame(height: 1).id("end")
+                        .background(GeometryReader { g in
+                            Color.clear.preference(key: EndOffsetKey.self, value: g.frame(in: .named("chat")).minY)
+                        })
                 }
                 .padding(16)
             }
+            .coordinateSpace(.named("chat"))
+            .background(GeometryReader { g in Color.clear.onAppear { viewportHeight = g.size.height }
+                .onChange(of: g.size.height) { _, h in viewportHeight = h } })
+            .onPreferenceChange(EndOffsetKey.self) { y in
+                let bottom = y <= viewportHeight + 60
+                if bottom != atBottom { atBottom = bottom }
+                if bottom { unseen = 0 }
+            }
             .scrollDismissesKeyboard(.interactively)
-            .onChange(of: allItems.count) { _, _ in
-                DispatchQueue.main.async { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
+            .onChange(of: allItems.count) { old, new in
+                // Follow new messages only when you are already at the end; otherwise count them.
+                if atBottom || old == 0 {
+                    DispatchQueue.main.async { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
+                } else {
+                    unseen += max(0, new - old)
+                }
+            }
+            .onChange(of: scrollTarget) { _, id in
+                guard let id else { return }
+                withAnimation { proxy.scrollTo(id, anchor: .center) }
+            }
+            .overlay(alignment: .bottom) {
+                if !atBottom && !allItems.isEmpty {
+                    Button {
+                        withAnimation { proxy.scrollTo("end", anchor: .bottom) }
+                        unseen = 0
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.down")
+                            if unseen > 0 { Text("\(unseen) nova\(unseen == 1 ? "" : "s")") }
+                        }
+                        .font(.footnote.weight(.semibold)).foregroundStyle(Theme.text)
+                        .padding(.horizontal, 14).frame(minHeight: 36)
+                        .background(Theme.surface, in: Capsule())
+                        .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
+                        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+                    }
+                    .padding(.bottom, 8)
+                    .accessibilityLabel(unseen > 0 ? "Ir para o fim, \(unseen) mensagens novas" : "Ir para o fim")
+                }
             }
         }
+        .safeAreaInset(edge: .top) { if searching { searchBar } }
         .safeAreaInset(edge: .bottom) { composer }
         .background(Theme.background)
         .navigationTitle(session?.title ?? "Sessão")
@@ -127,6 +180,7 @@ struct SessionView: View {
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
+                    Button { searching = true; searchFocused = true } label: { Label("Procurar na conversa", systemImage: "magnifyingglass") }
                     Button { Task { await fullLoad() } } label: { Label("Atualizar conversa", systemImage: "arrow.clockwise") }
                     Button { startConversation() } label: { Label("Conversa por voz", systemImage: "waveform") }
                     Button(role: .destructive) { Task { await stop() } } label: { Label("Parar o agente", systemImage: "stop.circle") }
@@ -387,7 +441,7 @@ struct SessionView: View {
                 Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(Theme.muted)
             }
             .font(.subheadline).lineLimit(1)
-            .padding(.horizontal, 12).frame(height: 36)
+            .padding(.horizontal, 12).frame(minHeight: 36)
             .background(Theme.elevated, in: Capsule())
         }
         .accessibilityLabel("Modelo e esforço: \(chosenModel?.name ?? modelLabel)")
@@ -415,7 +469,7 @@ struct SessionView: View {
                             .disabled(busyId != nil)
                         Button("Enviar agora") { sendNow() }
                             .font(.footnote.weight(.semibold)).foregroundStyle(Theme.text)
-                            .padding(.horizontal, 10).frame(height: 30)
+                            .padding(.horizontal, 10).frame(minHeight: 30)
                             .background(Theme.elevated, in: Capsule())
                             .disabled(busyId != nil || !online)
                     }
@@ -526,6 +580,54 @@ struct SessionView: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         }
+    }
+
+    // MARK: Search in the conversation
+
+    private var matches: [String] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard q.count >= 2 else { return [] }
+        return visible.filter { !$0.isStep && $0.text.range(of: q, options: [.caseInsensitive, .diacriticInsensitive]) != nil }.map(\.id)
+    }
+
+    private func isCurrentMatch(_ id: String) -> Bool {
+        searching && !matches.isEmpty && matches[min(matchIndex, matches.count - 1)] == id
+    }
+
+    private func jump(_ step: Int) {
+        guard !matches.isEmpty else { return }
+        matchIndex = (matchIndex + step + matches.count) % matches.count
+        scrollTarget = nil
+        DispatchQueue.main.async { scrollTarget = matches[matchIndex] }
+    }
+
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(Theme.muted)
+            TextField("Procurar na conversa", text: $query)
+                .focused($searchFocused)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .foregroundStyle(Theme.text)
+                .submitLabel(.search)
+                .onSubmit { jump(1) }
+                .onChange(of: query) { _, _ in
+                    matchIndex = max(0, matches.count - 1)   // newest match first
+                    if let last = matches.last { scrollTarget = nil; DispatchQueue.main.async { scrollTarget = last } }
+                }
+            Text(matches.isEmpty ? (query.count >= 2 ? "0" : "") : "\(matchIndex + 1)/\(matches.count)")
+                .font(.footnote.monospacedDigit()).foregroundStyle(Theme.muted)
+            Button { jump(-1) } label: { Image(systemName: "chevron.up") }
+                .disabled(matches.isEmpty).accessibilityLabel("Resultado anterior")
+            Button { jump(1) } label: { Image(systemName: "chevron.down") }
+                .disabled(matches.isEmpty).accessibilityLabel("Resultado seguinte")
+            Button { searching = false; query = ""; searchFocused = false } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted) }
+                .accessibilityLabel("Fechar pesquisa")
+        }
+        .foregroundStyle(Theme.text)
+        .padding(.horizontal, 12).frame(minHeight: 44)
+        .background(Theme.surface, in: Capsule())
+        .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
+        .padding(.horizontal, 12).padding(.vertical, 6)
     }
 
     private func copyButton(_ text: String) -> some View {
@@ -846,4 +948,10 @@ struct SessionView: View {
             }
         }
     }
+}
+
+/// Where the end of the conversation sits inside the visible scroll area.
+private struct EndOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }

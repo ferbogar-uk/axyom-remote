@@ -169,3 +169,11 @@ Update (2026-11-18, 15:45), autonomous batch 4:
   "Desarquivar" (sessionControl archive with isArchived false).
 - Tap the plan usage strip: detail per plan with each window (5 h, week…), %,
   and when it renews.
+
+Update (2026-11-18, 16:30), autonomous batch 5:
+- Search inside a conversation ("…" > Procurar na conversa): count, previous /
+  next, the current match outlined in orange and scrolled to.
+- When you scroll up, new messages no longer pull you down: a "↓ N novas"
+  button appears and takes you to the end.
+- Accessibility: every icon-only button has a VoiceOver name; chips, buttons and
+  fields grow with large text (minimum heights instead of fixed ones).

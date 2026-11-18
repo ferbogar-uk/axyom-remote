@@ -238,7 +238,7 @@ struct ComandoView: View {
                     .accessibilityLabel("Limpar pesquisa")
             }
         }
-        .padding(.horizontal, 14).frame(height: 44)
+        .padding(.horizontal, 14).frame(minHeight: 44)
         .background(Theme.elevated, in: Capsule())
     }
 
