@@ -114,7 +114,7 @@ public enum Steps {
             (has("git status", "git branch"), "Viu o estado do git"),
             (has("gh run", "gh pr", "gh api"), "Consultou o GitHub"),
             (has("install", "npm i ", "pnpm add", "pip "), "Instalou dependências"),
-            (has("\\logs\\", "/logs/", ".log", "get-winevent"), "Viu os registos"),
+            (has("logs", ".log", "get-winevent", "journalctl"), "Viu os registos"),
             (has("grep ", "rg ", "select-string", "findstr", "start_search"), "Procurou no código"),
             (has("cat ", "head ", "tail ", "get-content", "type ", "sed -n", "less "), "Leu ficheiros"),
             (lower.hasPrefix("ls") || has(" ls ", "dir ", "get-childitem", "find ", "tree"), "Viu pastas e ficheiros"),
