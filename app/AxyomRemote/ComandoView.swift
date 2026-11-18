@@ -44,7 +44,10 @@ struct ComandoView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("AXYOM").font(.system(size: 26, weight: .bold)).foregroundStyle(Theme.text)
+                HStack(spacing: 8) {
+                    Image("AxyomSymbol").resizable().scaledToFit().frame(height: 34).accessibilityHidden(true)
+                    Text("AXYOM").font(.system(size: 26, weight: .semibold)).foregroundStyle(Theme.text)
+                }
                 HStack(spacing: 6) {
                     Circle().fill(pcOnline ? Theme.green : Theme.muted).frame(width: 8, height: 8)
                     Text(pcLine).font(.footnote).foregroundStyle(Theme.muted)

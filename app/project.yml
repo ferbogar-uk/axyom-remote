@@ -36,6 +36,7 @@ targets:
         PRODUCT_NAME: AxyomRemote
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: AXYOM
         INFOPLIST_KEY_NSCameraUsageDescription: "AXYOM uses the camera to read the pairing code shown on your PC."
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "AXYOM listens to your voice commands. Recognition runs on the iPhone."

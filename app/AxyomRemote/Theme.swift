@@ -1,24 +1,25 @@
 import SwiftUI
 
-/// The approved AXYOM Remote look (docs/DESIGN.md): dark ground, amber for
+/// The AXYOM brand look (docs/DESIGN.md, brand pack v1.1 dark tokens): graphite/navy ground, amber for
 /// actions, green for "ok". Colours are fixed on purpose: the approved
 /// mockups are dark only, so there is no light variant to adapt to.
 enum Theme {
-    static let background = Color(hex: 0x0E0F12)
-    static let surface = Color(hex: 0x16181D)
-    static let border = Color(hex: 0x262930)
-    static let borderStrong = Color(hex: 0x3A3D45)
-    static let text = Color(hex: 0xECEDEF)
-    static let textSoft = Color(hex: 0xD4D6DA)
-    static let muted = Color(hex: 0xA3A7AE)
-    static let amber = Color(hex: 0xF5A524)
-    static let amberLight = Color(hex: 0xFFC35C)
-    static let amberSurface = Color(hex: 0x1A1508)
-    static let amberFill = Color(hex: 0x2A1E08)
-    static let amberBorder = Color(hex: 0x5C4410)
-    static let onAmber = Color(hex: 0x1A1206)
-    static let green = Color(hex: 0x3DD68C)
-    static let danger = Color(hex: 0xFF8A80)
+    static let background = Color(hex: 0x0B0F14)
+    static let surface = Color(hex: 0x0F1B2D)
+    static let border = Color(hex: 0x2A3B52)
+    static let borderStrong = Color(hex: 0x60758E)
+    static let text = Color(hex: 0xE5E7EB)
+    static let textSoft = Color(hex: 0xC9D1DB)
+    static let muted = Color(hex: 0xAAB6C5)
+    static let amber = Color(hex: 0xFF9F3D)
+    static let amberLight = Color(hex: 0xFFBD70)
+    static let amberSurface = Color(hex: 0x1A1A1A)
+    static let amberFill = Color(hex: 0x2B2112)
+    static let amberBorder = Color(hex: 0x7A5420)
+    static let onAmber = Color(hex: 0x0B0F14)
+    static let green = Color(hex: 0x68D6A2)
+    static let danger = Color(hex: 0xFF929B)
+    static let elevated = Color(hex: 0x17283D)
 }
 
 extension Color {

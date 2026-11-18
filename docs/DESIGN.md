@@ -51,3 +51,7 @@ Nothing in `app/` has been compiled or run yet: there is no Swift toolchain on t
 or in the cloud workspace. The first compile happens on the macOS runner
 (`ios-compile.yml`, manual). Camera, microphone, speech and the live WebSocket have
 never been run on a device.
+
+## Brand update (2026-11-18)
+
+The app now uses the AXYOM brand pack (Corrected edition, direction 01): dark tokens from tokens.json (graphite #0B0F14, navy #0F1B2D, raised #17283D, amber #FF9F3D, text #E5E7EB, muted #AAB6C5), the app icon (1024 px, flattened to an opaque square), the flat symbol in the Comando header and the white lockup on the pairing screen. Fonts: Sora and Inter are not bundled (licence files needed), so the app still uses the system font. The pack says it is a design candidate, not trademark-cleared. Not yet checked on a device: icon at small sizes, contrast of the new colours on screen.

@@ -13,6 +13,7 @@ struct PairingView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
+                Image("AxyomLockup").resizable().scaledToFit().frame(height: 44).accessibilityLabel("AXYOM")
                 Text("Ligar ao teu PC").font(.system(size: 30, weight: .bold)).foregroundStyle(Theme.text)
                 Text("No AXYOM do PC, abre o ecrã de emparelhamento e aponta a câmara ao código.")
                     .font(.body).foregroundStyle(Theme.textSoft)
