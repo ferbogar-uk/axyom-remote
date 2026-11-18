@@ -27,6 +27,7 @@ struct SessionView: View {
     @StateObject private var voice = ReplySpeaker()
     @FocusState private var typing: Bool
     @State private var images: [PromptImage] = []
+    @State private var localQueued: [QueuedPreview] = []
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showPhotos = false
     @State private var showCamera = false
@@ -42,13 +43,17 @@ struct SessionView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     if loading && allItems.isEmpty { ProgressView().tint(Theme.amber).frame(maxWidth: .infinity).padding(.top, 40) }
-                    if let failure { Text(failure).font(.subheadline).foregroundStyle(Theme.danger).card() }
+                    if !model.snapshot.connected {
+                        OfflineBanner(message: model.snapshot.lastError)
+                    } else if let failure {
+                        Text(failure).font(.subheadline).foregroundStyle(Theme.danger).card()
+                    }
                     ForEach(visible) { item in bubble(item) }
                     if !loading && visible.isEmpty && failure == nil {
                         Text("Esta sessão ainda não tem mensagens legíveis.").font(.subheadline).foregroundStyle(Theme.muted)
                     }
                     if session?.isExecuting == true {
-                        HStack(spacing: 8) { ProgressView().tint(Theme.green); Text("O agente está a trabalhar…").font(.footnote).foregroundStyle(Theme.muted) }
+                        WorkingLine(label: AgentActivity.current(allItems))
                     }
                     ForEach(PendingPrompts.permissions(in: allItems)) { permissionCard($0) }
                     ForEach(PendingPrompts.questions(in: allItems)) { questionCard($0) }
@@ -200,6 +205,7 @@ struct SessionView: View {
         VStack(alignment: .leading, spacing: 6) {
             if let problem = listener.problem { Text(problem).font(.caption).foregroundStyle(Theme.danger).padding(.horizontal, 8) }
             if !online { Text("O PC está offline: a resposta fica guardada e corre quando ele ligar.").font(.caption).foregroundStyle(Theme.muted).padding(.horizontal, 8) }
+            queueTray
             VStack(alignment: .leading, spacing: 10) {
                 AttachmentTray(images: $images)
                 if listener.listening && !conversation {
@@ -263,22 +269,101 @@ struct SessionView: View {
                 .opacity(hasContent && !canSend ? 0.45 : 1)
         }
         .disabled(hasContent ? !canSend : !model.snapshot.connected)
-        .accessibilityLabel(hasContent ? "Enviar" : "Começar conversa por voz")
+        .accessibilityLabel(hasContent ? (busy ? "Pôr na fila" : "Enviar") : "Começar conversa por voz")
+        .contextMenu {
+            // While the agent works, a tap queues; hold for "send now" (like Claude).
+            if hasContent && busy {
+                Button { let text = draft; Task { await send(text, source: "keyboard", images: images) } } label: {
+                    Label("Pôr na fila", systemImage: "text.append")
+                }
+                Button { let text = draft; Task { await send(text, source: "keyboard", images: images, now: true) } } label: {
+                    Label("Enviar agora", systemImage: "arrow.uturn.forward")
+                }
+            }
+        }
     }
 
-    /// The session's model as the PC reports it. Switching model or effort from
-    /// the phone needs the desktop to honour it (REQUESTS-TO-DESKTOP #4), so the
-    /// chip says so instead of pretending.
+    /// The agent is in the middle of a turn: new messages wait in the queue.
+    private var busy: Bool { session?.isExecuting == true }
+
+    /// Exact model from the transcript (e.g. "Opus 5.5"), else the index's family name.
+    private var modelLabel: String {
+        ModelInfo.display(ModelInfo.latest(in: allItems)) ?? ModelName.display(session?.model, provider: session?.provider)
+    }
+
+    /// Model and effort menu. The lists are the desktop's; choosing is greyed
+    /// out until the PC accepts a change from the phone (REQUESTS-TO-DESKTOP #4).
     private var modelChip: some View {
-        Button {
-            notice = "Trocar de modelo e esforço no iPhone fica disponível quando o PC aceitar o pedido (#4). Por agora muda no PC."
+        Menu {
+            Section("Modelo desta sessão") {
+                Label(modelLabel, systemImage: "checkmark")
+            }
+            Section("Esforço") {
+                ForEach(EffortLevels.all, id: \.key) { level in
+                    Button(level.label) {}.disabled(true)
+                }
+            }
+            Section {
+                Text("Trocar modelo e esforço daqui chega quando o PC aceitar (pedido #4). Por agora muda no PC.")
+            }
         } label: {
-            Text(ModelName.display(session?.model, provider: session?.provider))
-                .font(.subheadline).foregroundStyle(Theme.textSoft).lineLimit(1)
-                .padding(.horizontal, 12).frame(height: 36)
-                .background(Theme.elevated, in: Capsule())
+            HStack(spacing: 4) {
+                Text(modelLabel).foregroundStyle(Theme.text)
+                Image(systemName: "chevron.down").font(.caption2.weight(.semibold)).foregroundStyle(Theme.muted)
+            }
+            .font(.subheadline).lineLimit(1)
+            .padding(.horizontal, 12).frame(height: 36)
+            .background(Theme.elevated, in: Capsule())
         }
-        .accessibilityLabel("Modelo da sessão")
+        .accessibilityLabel("Modelo da sessão: \(modelLabel)")
+    }
+
+    /// Prompts waiting for the agent: the PC's queue plus the ones this phone just
+    /// sent while it was busy, until they show up in the conversation.
+    private var queuedPrompts: [QueuedPreview] {
+        let asked = Set(allItems.filter { $0.direction == "input" }.map { $0.text.trimmingCharacters(in: .whitespacesAndNewlines) })
+        var out = session?.queued ?? []
+        for q in localQueued where !out.contains(where: { $0.id == q.id || $0.text == q.text }) { out.append(q) }
+        return out.filter { !asked.contains($0.text) }
+    }
+
+    @ViewBuilder private var queueTray: some View {
+        if !queuedPrompts.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(queuedPrompts) { q in
+                    HStack(spacing: 10) {
+                        Image(systemName: "clock").font(.footnote).foregroundStyle(Theme.muted)
+                        Text(q.text).font(.subheadline).foregroundStyle(Theme.textSoft).lineLimit(1)
+                        Spacer(minLength: 6)
+                        Button("Enviar agora") { sendNow() }
+                            .font(.footnote.weight(.semibold)).foregroundStyle(Theme.text)
+                            .padding(.horizontal, 10).frame(height: 30)
+                            .background(Theme.elevated, in: Capsule())
+                            .disabled(busyId != nil || !online)
+                    }
+                }
+                Text("Na fila: corre quando o agente acabar o que está a fazer.").font(.caption).foregroundStyle(Theme.muted)
+            }
+            .padding(12)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.border, lineWidth: 1))
+        }
+    }
+
+    /// Stop the current turn and run the queue now.
+    private func sendNow() {
+        guard let client = model.client else { return }
+        Task {
+            busyId = "sendnow"
+            do {
+                try await client.sendNow(sessionId: sessionId, targetDeviceId: target)
+                notice = "A parar o que estava a fazer e a correr a tua mensagem agora."
+                Prefs.tap()
+            } catch {
+                actionError = "Não consegui falar com o PC. Tenta outra vez."
+            }
+            busyId = nil
+        }
     }
 
     private var canSend: Bool {
@@ -487,18 +572,22 @@ struct SessionView: View {
         }
     }
 
-    private func send(_ text: String, source: String, images: [PromptImage] = []) async {
+    private func send(_ text: String, source: String, images: [PromptImage] = [], now: Bool = false) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let client = model.client, !trimmed.isEmpty || !images.isEmpty else { return }
         busyId = "send"
         defer { busyId = nil }
         do {
-            try await client.sendPrompt(sessionId: sessionId, text: trimmed, images: images, source: source, targetDeviceId: target)
+            let wasBusy = busy
+            let id = try await client.sendPrompt(sessionId: sessionId, text: trimmed, images: images, source: source, targetDeviceId: target)
             Prefs.tap()
+            if wasBusy && !now { localQueued.append(QueuedPreview(id: id, text: trimmed)) }
+            if now && wasBusy { try await client.sendNow(sessionId: sessionId, targetDeviceId: target) }
             draft = ""
             if !images.isEmpty { self.images = [] }
             actionError = nil
-            notice = online ? "Resposta enviada. À espera do agente…" : "Resposta guardada. Corre quando o PC ligar."
+            notice = !online ? "Resposta guardada. Corre quando o PC ligar."
+                : (wasBusy && !now) ? "Na fila. Corre quando o agente acabar." : "Resposta enviada. À espera do agente…"
             typing = false
         } catch RemoteClient.ClientError.notConnected {
             actionError = "Sem ligação ao servidor. A tua resposta não foi enviada."

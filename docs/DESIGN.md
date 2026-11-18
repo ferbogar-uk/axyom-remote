@@ -112,3 +112,17 @@ Computers (online/offline, project count), plan usage, appearance picker
 speed, silence before sending (1.5 / 1.8 / 2.5 s), notifications on/off, haptic
 tap on send, link to iPhone permissions, version and server, unpair. All stored
 on the phone (UserDefaults) and used by the app; nothing in it is decoration.
+
+Update (2026-11-18, 13:00):
+- Offline: one red line "Sem ligação à internet. Volto a ligar sozinho." instead
+  of the raw NSURLError, which also printed the request URL with the 5-minute
+  access token on screen. Core never stores raw errors now (ConnectionMessage).
+- Agent activity line with three animated dots: "A correr um comando…",
+  "A ler ficheiros…", "A pensar…", from the newest transcript row.
+- Model chip shows the exact model from the transcript's init row ("Opus 5.5")
+  and opens a menu with the desktop's effort levels, greyed out until request #4.
+- Queue / send now: while the agent works, tapping send queues the message
+  (shown above the composer with "Enviar agora"); holding the send button offers
+  "Pôr na fila" or "Enviar agora". Send now = stop the turn, then run the queue,
+  as the desktop's own send-now does. No "undo send": once the PC has the
+  prompt in its queue the phone cannot remove it (would need a desktop change).

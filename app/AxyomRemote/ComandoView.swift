@@ -75,15 +75,15 @@ struct ComandoView: View {
     }
 
     @ViewBuilder private var statusBanner: some View {
-        if case .offline(_, let lastSeen) = model.pcStatus {
+        if !model.snapshot.connected {
+            OfflineBanner(message: model.snapshot.lastError)
+        } else if case .offline(_, let lastSeen) = model.pcStatus {
             VStack(alignment: .leading, spacing: 4) {
                 Text("O PC não está ligado").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.text)
                 Text("\(lastSeen.map { "Visto \(RelativeAge.portuguese(from: $0)). " } ?? "")Podes ler as sessões. Começar sessões só funciona com o PC ligado.")
                     .font(.footnote).foregroundStyle(Theme.muted)
             }
             .card(stroke: Theme.borderStrong)
-        } else if !model.snapshot.connected {
-            Text(model.snapshot.lastError ?? "A ligar ao servidor…").font(.footnote).foregroundStyle(Theme.muted)
         }
     }
 
