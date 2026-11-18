@@ -14,6 +14,30 @@ struct SettingsView: View {
     @AppStorage(Prefs.Key.voiceLanguage) private var voiceLanguage = "pt-BR"
     @AppStorage(Prefs.Key.speechRate) private var speechRate = "normal"
     @AppStorage(Prefs.Key.silence) private var silence = 1.8
+    @AppStorage(Prefs.Key.voiceEngine) private var voiceEngine = "azure"
+    @AppStorage(Prefs.Key.azureVoice) private var azureVoice = ""
+
+    /// One picker for engine + voice: "system", "" (server default = the PC's voice) or an Azure voice id.
+    private var voiceChoice: Binding<String> {
+        Binding(get: { voiceEngine == "system" ? "system" : azureVoice },
+                set: { v in
+                    if v == "system" { voiceEngine = "system" } else { voiceEngine = "azure"; azureVoice = v }
+                })
+    }
+
+    private var voiceOptions: [(String, String)] {
+        guard let s = model.voiceStatus, s.configured else { return [("system", "Voz do iPhone")] }
+        return [("", "Igual ao PC (Azure)")] + s.voices.map { ($0.id, $0.label) } + [("system", "Voz do iPhone")]
+    }
+
+    private var voiceFooter: String {
+        guard let s = model.voiceStatus else { return "Voz neural: o servidor não respondeu, uso a voz do iPhone." }
+        guard s.configured else { return "Voz neural: o servidor ainda não tem a chave Azure, uso a voz do iPhone." }
+        let used = s.usedChars.formatted(.number.locale(Locale(identifier: "pt_PT")))
+        let cap = s.monthlyCharCap.formatted(.number.locale(Locale(identifier: "pt_PT")))
+        return s.exhausted ? "Voz neural: limite do mês atingido (\(used) de \(cap) caracteres), uso a voz do iPhone."
+                           : "Voz neural Azure: \(used) de \(cap) caracteres usados este mês. Se falhar, a app usa a voz do iPhone."
+    }
     @AppStorage(Prefs.Key.haptics) private var haptics = true
     @AppStorage(Prefs.Key.notifications) private var notifications = true
     @AppStorage(Prefs.Key.notifyFinished) private var notifyFinished = true
@@ -62,6 +86,7 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    pickerRow("waveform", "Voz", selection: voiceChoice, options: voiceOptions)
                     pickerRow("globe", "Idioma da voz", selection: $voiceLanguage, options: [("pt-BR", "Português (Brasil)"), ("pt-PT", "Português (Portugal)")])
                     pickerRow("speaker.wave.2", "Velocidade da leitura", selection: $speechRate, options: [("slow", "Devagar"), ("normal", "Normal"), ("fast", "Rápida")])
                     HStack(spacing: 14) {
@@ -80,7 +105,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Voz e ditado")
                 } footer: {
-                    Text("Na conversa por voz, a app envia quando ficas este tempo em silêncio e lê a resposta com a voz do iPhone.")
+                    Text("Na conversa por voz, a app envia quando ficas este tempo em silêncio e lê a resposta em voz alta. " + voiceFooter)
                 }
 
                 Section {
@@ -120,6 +145,7 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .background(Theme.background)
             .navigationTitle("Definições")
+            .task { await model.refreshVoice() }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
