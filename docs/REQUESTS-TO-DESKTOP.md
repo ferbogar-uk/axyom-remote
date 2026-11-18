@@ -45,6 +45,12 @@ Needed for real push:
 The iPhone side (token registration, Push capability, opening the session from
 the notification) will be done once the server message exists.
 
+Status: done on the server (axyom-backend c204ac3, sync/PROTOCOL.md "Mobile
+push"). Ricardo added the APNs key and turned Push on for com.axyom.remote
+(18 Nov 2026). The phone sends `registerPushToken` on every connect and
+`unregisterPushToken` on unpair; tapping the alert opens its sessionId. Not
+yet tested on a device.
+
 ## 3. Plan usage / progress on the iPhone
 
 Status: delivered by the desktop (planUsageBroadcast, HANDOFF 6a); the phone
@@ -126,3 +132,28 @@ Send it exactly as proposed: sessionControl `remove_queued`, `payload:
 - a prompt from another session → ignored.
 There is no reply message: the phone learns the result from the next
 `queuedPrompts` publish. Not tested with a real phone yet.
+
+## 7. Azure neural voice for the iPhone, through the sync server
+
+Ricardo created an Azure Speech key (18 Nov 2026) so the phone can speak
+replies with the same neural voice as AVA instead of the iPhone system voice.
+The key must stay on the server (this repo is public and an app binary can be
+unpacked), so the phone needs a small authenticated endpoint on axyom-sync.
+
+Proposal:
+- Worker secrets `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION` (Ricardo pastes
+  them; never in a repo).
+- `POST /voice/tts` with the same personal JWT the WebSocket uses (header
+  `Authorization: Bearer …`), body `{ text, voice?, rate? }`, text capped at
+  ~3000 chars, a sensible per-user rate limit.
+- The Worker calls Azure TTS (`audio-24khz-48kbitrate-mono-mp3`, default voice
+  `pt-BR-FranciscaNeural` or whatever AVA uses) and streams the MP3 back.
+- `GET /voice/status` → `{ configured: bool, voices: [...] }` so the phone can
+  show the option only when it works.
+- Optional later: `POST /voice/stt` for Azure recognition (the phone keeps
+  Apple recognition until then).
+
+The phone will fall back to the system voice whenever the endpoint is
+missing, unconfigured or fails.
+
+Status: waiting for the desktop/server session.
