@@ -133,7 +133,7 @@ struct SessionView: View {
                 .accessibilityLabel("Mais opções")
             }
         }
-        .task { await fullLoad() }
+        .task { await fullLoad(); try? await model.client?.markRead(sessionId: sessionId) }
         .task(id: sessionId) { await live() }
         .task(id: sessionId) { await poll() }
         .refreshable { await fullLoad() }
@@ -469,6 +469,7 @@ struct SessionView: View {
         if !mine {
             MarkdownText(text: item.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .contextMenu { copyButton(item.text) }
         } else {
         Text(item.text)
             .font(.body).foregroundStyle(mine ? Theme.text : Theme.textSoft)
@@ -476,8 +477,13 @@ struct SessionView: View {
             .padding(.horizontal, 14).padding(.vertical, 10)
             .background(mine ? Theme.amberFill : .clear, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(mine ? Theme.amberBorder : .clear, lineWidth: 1))
+            .contextMenu { copyButton(item.text) }
             .frame(maxWidth: .infinity, alignment: mine ? .trailing : .leading)
         }
+    }
+
+    private func copyButton(_ text: String) -> some View {
+        Button { UIPasteboard.general.string = text; Prefs.tap() } label: { Label("Copiar", systemImage: "doc.on.doc") }
     }
 
     // MARK: Prompt cards
@@ -497,6 +503,13 @@ struct SessionView: View {
                     .buttonStyle(SecondaryButtonStyle())
                 Button("Aprovar uma vez") { act(p.id) { try await $0.respondToPermission(sessionId: sessionId, promptId: p.id, allow: true, targetDeviceId: target) } }
                     .buttonStyle(PrimaryButtonStyle())
+            }
+            .disabled(busyId != nil || !online)
+            HStack(spacing: 10) {
+                Button("Sempre nesta sessão") { act(p.id) { try await $0.respondToPermission(sessionId: sessionId, promptId: p.id, allow: true, scope: "session", targetDeviceId: target) } }
+                    .buttonStyle(SecondaryButtonStyle())
+                Button("Sempre neste projeto") { act(p.id) { try await $0.respondToPermission(sessionId: sessionId, promptId: p.id, allow: true, scope: "always", targetDeviceId: target) } }
+                    .buttonStyle(SecondaryButtonStyle())
             }
             .disabled(busyId != nil || !online)
         }
@@ -767,6 +780,8 @@ struct SessionView: View {
         allItems.append(contentsOf: added)
         allItems.sort { $0.sequence < $1.sequence }
         if added.contains(where: { $0.direction == "output" }) { notice = nil }
+        let id = sessionId
+        Task { try? await model.client?.markRead(sessionId: id) }
         if conversation {
             let after = ChatLines.build(allItems, provider: provider).filter { !$0.mine }.map(\.text)
             let spoken = Array(after.dropFirst(before.count))

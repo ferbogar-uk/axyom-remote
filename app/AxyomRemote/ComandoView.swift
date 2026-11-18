@@ -32,6 +32,7 @@ struct ComandoView: View {
                 .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
+            .refreshable { try? await model.client?.refreshIndex() }
             .navigationDestination(for: String.self) { SessionView(sessionId: $0) }
             .safeAreaInset(edge: .bottom) { bottomBar }
             .toolbar(.hidden, for: .navigationBar)
@@ -172,6 +173,7 @@ struct ComandoView: View {
                 Text("\(s.projectName) · \(ProviderName.display(s.provider))").font(.caption).foregroundStyle(Theme.muted)
             }
             Spacer(minLength: 8)
+            if s.isUnread { Circle().fill(Theme.text).frame(width: 8, height: 8).accessibilityLabel("Não lida") }
             Text(trailing).font(.footnote).foregroundStyle(tint)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)

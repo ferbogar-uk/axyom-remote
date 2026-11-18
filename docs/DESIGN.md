@@ -141,3 +141,11 @@ Update (2026-11-18, 14:40), autonomous batch 1:
 - Home: search field (title, project, agent) and long-press "Arquivar sessão"
   (sessionControl archive, which the desktop already handles).
 - New session: choose the model from the PC's list (or the PC default).
+
+Update (2026-11-18, 15:00), autonomous batch 2:
+- Permission card: also "Sempre nesta sessão" (scope session) and "Sempre neste
+  projeto" (scope always), the desktop's own scopes.
+- Read state shared with the PC: opening a session (and new messages arriving
+  while it is open) publishes `lastReadAt`; home rows show a dot when unread.
+- Home: pull to refresh (asks the server for the list again).
+- Long-press any message: Copiar.

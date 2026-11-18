@@ -19,8 +19,19 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
     public var queued: [QueuedPreview] = []
     /// The session's effort as the desktop publishes it (nil = desktop default).
     public var effortLevel: String?
+    /// Last time any device read this session (shared across devices).
+    public var lastReadAt: Date?
+    /// Last time the session got a message.
+    public var lastMessageAt: Date?
 
-    public init(id: String, title: String, projectId: String, provider: String, model: String? = nil, isExecuting: Bool = false, hasPendingPrompt: Bool = false, queuedPromptCount: Int = 0, isArchived: Bool = false, hostDeviceId: String? = nil, lastActivity: Date, encryptedProjectId: String = "", effortLevel: String? = nil, queued: [QueuedPreview] = []) {
+    /// New messages since anyone last read it (and not waiting on you, which shows its own way).
+    public var isUnread: Bool {
+        guard let msg = lastMessageAt else { return false }
+        guard let read = lastReadAt else { return true }
+        return msg > read.addingTimeInterval(1)
+    }
+
+    public init(id: String, title: String, projectId: String, provider: String, model: String? = nil, isExecuting: Bool = false, hasPendingPrompt: Bool = false, queuedPromptCount: Int = 0, isArchived: Bool = false, hostDeviceId: String? = nil, lastActivity: Date, encryptedProjectId: String = "", effortLevel: String? = nil, lastReadAt: Date? = nil, lastMessageAt: Date? = nil, queued: [QueuedPreview] = []) {
         self.id = id
         self.title = title
         self.projectId = projectId
@@ -35,6 +46,8 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
         self.encryptedProjectId = encryptedProjectId
         self.queued = queued
         self.effortLevel = effortLevel
+        self.lastReadAt = lastReadAt
+        self.lastMessageAt = lastMessageAt
     }
 
     /// Folder name of the project ("C:\…\AXYOM - AI Development OS" -> "AXYOM - AI Development OS").
@@ -70,6 +83,8 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
             lastActivity: Date(timeIntervalSince1970: max(entry.lastMessageAt, entry.updatedAt) / 1000),
             encryptedProjectId: entry.encryptedProjectId,
             effortLevel: entry.effortLevel,
+            lastReadAt: entry.lastReadAt.map { Date(timeIntervalSince1970: $0 / 1000) },
+            lastMessageAt: Date(timeIntervalSince1970: entry.lastMessageAt / 1000),
             queued: (entry.encryptedQueuedPrompts ?? []).compactMap { q in
                 (try? crypto.decrypt(ciphertext: q.encryptedPrompt, iv: q.iv)).map { QueuedPreview(id: q.id, text: $0) }
             }

@@ -350,6 +350,34 @@ public actor RemoteClient {
         try await sendControl(sessionId: sessionId, type: "prompt", payload: nil, targetDeviceId: targetDeviceId)
     }
 
+    /// Ask the server for the whole session list again (pull to refresh).
+    public func refreshIndex() async throws {
+        guard let socket = index else { throw ClientError.notConnected }
+        try await socket.send(ClientMessage.indexSyncRequest.encoded())
+    }
+
+    /// Mark a session read on every device: an `indexUpdate` carrying only the
+    /// identity fields and `lastReadAt`, as the desktop's own phone client does.
+    /// `messageCount`, execution state and the queue are left out on purpose:
+    /// omitted fields keep their stored value.
+    public func markRead(sessionId: String) async throws {
+        guard let socket = index else { throw ClientError.notConnected }
+        guard var current = entries[sessionId] else { throw ClientError.refused("unknown session") }
+        let nowMs = (now().timeIntervalSince1970 * 1000).rounded()
+        if let read = current.lastReadAt, read >= current.lastMessageAt { return }
+        let entry = SessionIndexEntry(
+            sessionId: current.sessionId, encryptedProjectId: current.encryptedProjectId, projectIdIv: current.projectIdIv,
+            encryptedTitle: current.encryptedTitle, titleIv: current.titleIv, provider: current.provider,
+            model: current.model, mode: current.mode, sessionType: current.sessionType,
+            lastMessageAt: current.lastMessageAt, createdAt: current.createdAt, updatedAt: current.updatedAt,
+            lastReadAt: nowMs)
+        try await socket.send(ClientMessage.indexUpdate(entry).encoded())
+        current.lastReadAt = nowMs
+        entries[sessionId] = current
+        if let s = FleetSession.from(current, crypto: crypto) { sessions[sessionId] = s }
+        publish()
+    }
+
     /// Archive (or bring back) a session on the PC.
     public func archive(sessionId: String, archived: Bool = true, targetDeviceId: String?) async throws {
         try await sendControl(sessionId: sessionId, type: "archive", payload: .object(["isArchived": .bool(archived)]), targetDeviceId: targetDeviceId)

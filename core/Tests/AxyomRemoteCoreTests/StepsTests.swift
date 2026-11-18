@@ -43,4 +43,33 @@ final class StepsTests: XCTestCase {
         XCTAssertEqual(p["isArchived"]?.bool, true)
         await client.stop()
     }
+
+    func testMarkReadSendsOnlyLastReadAt() async throws {
+        let crypto = try SyncCrypto(seed: "seed", memberId: "owner")
+        let pairing = PairingPayload(server: "https://sync.example", key: "k", seed: "seed", issuedAt: 0)
+        let phone = DeviceInfo(deviceId: "phone1", name: "iPhone", type: "mobile", platform: "ios", connectedAt: 0, lastActiveAt: 0)
+        let box = SocketBox()
+        let client = RemoteClient(pairing: pairing, crypto: crypto, device: phone, factory: { url in box.make(url) },
+                                  now: { Date(timeIntervalSince1970: 1_800_000_000) },
+                                  sleep: { _ in try? await Task.sleep(nanoseconds: 5_000_000) })
+        await client.start()
+        await assertEventually { box.sockets.first?.sentTypes == ["deviceAnnounce", "indexSyncRequest"] }
+        let p = try crypto.encrypt("/p")
+        let e = SessionIndexEntry(sessionId: "s1", encryptedProjectId: p.ciphertext, projectIdIv: p.iv, provider: "claude-code",
+                                  messageCount: 9, lastMessageAt: 1_799_999_000_000, createdAt: 1, updatedAt: 2, isExecuting: true, lastReadAt: 1_000)
+        box.sockets[0].push(#"{"type":"indexSyncResponse","sessions":[\#(String(decoding: try JSONEncoder().encode(e), as: UTF8.self))],"projects":[]}"#)
+        await assertEventually { await client.currentSnapshot().sessions.first?.isUnread == true }
+        try await client.markRead(sessionId: "s1")
+        let update = box.sockets[0].sent.compactMap { try? JSONDecoder().decode([String: JSONValue].self, from: Data($0.utf8)) }.last { $0["type"]?.string == "indexUpdate" }
+        guard case .object(let s)? = update?["session"] else { return XCTFail("no update") }
+        XCTAssertEqual(s["lastReadAt"]?.number, 1_800_000_000_000)
+        XCTAssertNil(s["messageCount"]); XCTAssertNil(s["isExecuting"]); XCTAssertNil(s["queuedPromptCount"])
+        let unread = await client.currentSnapshot().sessions.first?.isUnread
+        XCTAssertEqual(unread, false)
+        // Already read: nothing more is sent.
+        let before = box.sockets[0].sent.count
+        try await client.markRead(sessionId: "s1")
+        XCTAssertEqual(box.sockets[0].sent.filter { $0.contains("indexUpdate") }.count, box.sockets[0].sent.prefix(before).filter { $0.contains("indexUpdate") }.count)
+        await client.stop()
+    }
 }
