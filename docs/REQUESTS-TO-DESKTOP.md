@@ -25,7 +25,7 @@ shown only on request and for a few minutes (whoever reads it has full access).
 The iPhone session does not edit axyom-v01.
 Status: done on the desktop (commit d68cd0a, AxyomPairingModal.tsx).
 
-## 2. Push notifications when a session waits for you
+## 2. Push notifications when a session waits for you (DONE on the server)
 
 The iPhone app now raises a local notification when a session flips to
 "waiting for you" (hasPendingPrompt), but only while the app is running: iOS
@@ -45,32 +45,53 @@ Needed for real push:
 The iPhone side (token registration, Push capability, opening the session from
 the notification) will be done once the server message exists.
 
-Status: server side done and deployed (axyom-backend c204ac3, server 0.2.0,
-18 Nov 2026). APNs key 4TVQFVRMCH (team Z6HU7P866U) is a Worker secret; a
-smoke test proves Apple accepts it. Ricardo was asked to tick Push Notifications
-on the App ID com.axyom.remote (not confirmed yet). Full contract: axyom-backend/sync/PROTOCOL.md,
-"Mobile push (APNs)". The desktop already asks for pushes (waiting for you,
-finished, error); nothing new is needed there.
+Status: DONE on the server (axyom-backend d186d36, Worker axyom-sync 0.2.0,
+deployed 18 Nov 2026). APNs key 4TVQFVRMCH (team Z6HU7P866U, topic
+com.axyom.remote) is stored as Worker secrets APNS_KEY_P8 / APNS_KEY_ID /
+APNS_TEAM_ID. Tests: 7 policy tests (`node --test test/pushPolicy.test.ts`)
+and 38 live checks (`node test/smoke.mjs`); a fake token got BadDeviceToken
+from Apple, which proves the key is accepted. Full contract:
+axyom-backend/sync/PROTOCOL.md, "Mobile push (APNs)". No desktop change.
 
-What the iPhone app must do now:
-1. Entitlement `aps-environment` (production for TestFlight) and the Push
-   Notifications capability in project.yml.
-2. Ask notification permission (alert, sound, badge), then
-   `registerForRemoteNotifications()`.
-3. On the device token (hex, lowercase), send on the index room after
-   `deviceAnnounce`, on every connect (tokens can change):
-   `{ "type": "registerPushToken", "deviceId": <same id as deviceAnnounce>,
-   "platform": "ios", "token": "<hex>" }` (add `"environment": "development"`
-   only for an Xcode/debug build). Expect `registerPushTokenResult`
-   `{ ok: true, pushConfigured: true }`.
-4. When the user turns notifications off in the app: `unregisterPushToken
-   { deviceId }`.
-5. Tapping a notification: payload has top-level `sessionId`; open that
-   session. Text is generic Portuguese ("Uma sessão está à tua espera" etc.);
-   the app can show the decrypted title once open.
-6. Keep sending something (ping) while in the foreground: the server treats a
-   phone as present (and does not push it) only if it spoke in the last 60 s.
-Not tested on a real phone yet: needs a TestFlight build with steps 1 to 3.
+Exact messages (index room of the member):
+
+    → { "type": "registerPushToken", "deviceId": "<same id as deviceAnnounce>",
+        "token": "<APNs device token, hex>", "platform": "ios",
+        "environment": "production" | "sandbox" }
+    ← { "type": "pushTokenRegistered", "deviceId": "...", "pushConfigured": true }
+    ← { "type": "error", "code": "bad_message" | "too_many_devices", "message": "..." }
+
+    → { "type": "unregisterPushToken", "deviceId": "..." }    (no reply)
+
+A new token for the same deviceId replaces the old one. Send
+registerPushToken after deviceAnnounce on every connect (tokens can change).
+`environment` absent = production (TestFlight). A token from the other
+environment is retried once on the other APNs host.
+
+Pushes are sent when:
+- `kind: "waiting"`: plaintext `hasPendingPrompt` goes false/absent → true;
+- `kind: "finished"`: `isExecuting` goes true → false;
+- the desktop's own `requestMobilePush` (already sent) maps to the same kinds,
+  plus `"error"` (agent error) and `"update"` (anything else).
+At most one push per session and kind every 60 s (shared by both triggers, so
+never doubled), at most 6 per minute in total. Never to the device that caused
+the change, nor to a phone that is present: socket open AND a message in the
+last 60 s, so keep pinging while in the foreground.
+
+Payload:
+
+    { "aps": { "alert": { "title": "AXYOM", "body": "Uma sessão está à tua espera" },
+               "sound": "default", "thread-id": "<sessionId>" },
+      "sessionId": "<sessionId>", "kind": "waiting" }
+
+Bodies: waiting "Uma sessão está à tua espera", finished "Um agente terminou",
+error "Um agente teve um erro", update "Há novidades numa sessão".
+
+Still to do on the iPhone: `aps-environment` entitlement + Push capability in
+project.yml, ask permission, registerForRemoteNotifications, send
+registerPushToken, open `sessionId` on tap. Ricardo was asked to tick Push
+Notifications on the App ID com.axyom.remote (not confirmed yet).
+Not tested on a real phone yet.
 
 ## 3. Plan usage / progress on the iPhone
 
