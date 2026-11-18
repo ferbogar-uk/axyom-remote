@@ -50,3 +50,4 @@ jobs:
           echo "--- app bundle contents"
           ls "$app"
           test -f "$app/PrivacyInfo.xcprivacy" && echo "Privacy manifest: included" || { echo "::error::Privacy manifest missing from the app bundle"; exit 1; }
+# recompile 2
