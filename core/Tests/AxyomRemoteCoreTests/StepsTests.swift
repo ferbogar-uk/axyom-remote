@@ -72,4 +72,35 @@ final class StepsTests: XCTestCase {
         XCTAssertEqual(box.sockets[0].sent.filter { $0.contains("indexUpdate") }.count, box.sockets[0].sent.prefix(before).filter { $0.contains("indexUpdate") }.count)
         await client.stop()
     }
+
+    func testDraftKeepsOtherMetadataFields() async throws {
+        let crypto = try SyncCrypto(seed: "seed", memberId: "owner")
+        let pairing = PairingPayload(server: "https://sync.example", key: "k", seed: "seed", issuedAt: 0)
+        let phone = DeviceInfo(deviceId: "phone1", name: "iPhone", type: "mobile", platform: "ios", connectedAt: 0, lastActiveAt: 0)
+        let box = SocketBox()
+        let client = RemoteClient(pairing: pairing, crypto: crypto, device: phone, factory: { url in box.make(url) },
+                                  now: { Date(timeIntervalSince1970: 1_800_000_000) },
+                                  sleep: { _ in try? await Task.sleep(nanoseconds: 5_000_000) })
+        await client.start()
+        await assertEventually { box.sockets.first?.sentTypes == ["deviceAnnounce", "indexSyncRequest"] }
+        let p = try crypto.encrypt("/p")
+        let meta = try crypto.encrypt(#"{"hasPendingPrompt":true,"phase":"build","tags":["x"],"draftInput":"do PC","draftUpdatedAt":5}"#)
+        var e = SessionIndexEntry(sessionId: "s1", encryptedProjectId: p.ciphertext, projectIdIv: p.iv, provider: "claude-code", lastMessageAt: 1, createdAt: 1, updatedAt: 1)
+        e.encryptedClientMetadata = meta.ciphertext; e.clientMetadataIv = meta.iv
+        box.sockets[0].push(#"{"type":"indexSyncResponse","sessions":[\#(String(decoding: try JSONEncoder().encode(e), as: UTF8.self))],"projects":[]}"#)
+        await assertEventually { await client.currentSnapshot().sessions.first?.draftInput == "do PC" }
+
+        try await client.saveDraft(sessionId: "s1", text: "do iPhone")
+        let update = box.sockets[0].sent.compactMap { try? JSONDecoder().decode([String: JSONValue].self, from: Data($0.utf8)) }.last { $0["type"]?.string == "indexUpdate" }
+        guard case .object(let s)? = update?["session"], let blob = s["encryptedClientMetadata"]?.string, let iv = s["clientMetadataIv"]?.string else { return XCTFail("no metadata") }
+        let plain = try JSONDecoder().decode(JSONValue.self, from: Data(try crypto.decrypt(ciphertext: blob, iv: iv).utf8))
+        XCTAssertEqual(plain["draftInput"]?.string, "do iPhone")
+        XCTAssertEqual(plain["hasPendingPrompt"]?.bool, true, "other fields kept")
+        XCTAssertEqual(plain["phase"]?.string, "build")
+        XCTAssertEqual(plain["draftUpdatedAt"]?.number, 1_800_000_000_000)
+        XCTAssertNil(s["messageCount"]); XCTAssertNil(s["isExecuting"])
+        let local = await client.currentSnapshot().sessions.first?.draftInput
+        XCTAssertEqual(local, "do iPhone")
+        await client.stop()
+    }
 }

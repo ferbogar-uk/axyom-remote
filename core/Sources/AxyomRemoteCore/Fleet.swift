@@ -23,6 +23,11 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
     public var lastReadAt: Date?
     /// Last time the session got a message.
     public var lastMessageAt: Date?
+    /// Unsent text in the composer, shared between devices (client metadata).
+    public var draftInput: String?
+    public var draftUpdatedAt: Double?
+    public var messageCount: Int?
+    public var createdAt: Date?
 
     /// New messages since anyone last read it (and not waiting on you, which shows its own way).
     public var isUnread: Bool {
@@ -31,7 +36,7 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
         return msg > read.addingTimeInterval(1)
     }
 
-    public init(id: String, title: String, projectId: String, provider: String, model: String? = nil, isExecuting: Bool = false, hasPendingPrompt: Bool = false, queuedPromptCount: Int = 0, isArchived: Bool = false, hostDeviceId: String? = nil, lastActivity: Date, encryptedProjectId: String = "", effortLevel: String? = nil, lastReadAt: Date? = nil, lastMessageAt: Date? = nil, queued: [QueuedPreview] = []) {
+    public init(id: String, title: String, projectId: String, provider: String, model: String? = nil, isExecuting: Bool = false, hasPendingPrompt: Bool = false, queuedPromptCount: Int = 0, isArchived: Bool = false, hostDeviceId: String? = nil, lastActivity: Date, encryptedProjectId: String = "", effortLevel: String? = nil, lastReadAt: Date? = nil, lastMessageAt: Date? = nil, draftInput: String? = nil, draftUpdatedAt: Double? = nil, messageCount: Int? = nil, createdAt: Date? = nil, queued: [QueuedPreview] = []) {
         self.id = id
         self.title = title
         self.projectId = projectId
@@ -48,6 +53,10 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
         self.effortLevel = effortLevel
         self.lastReadAt = lastReadAt
         self.lastMessageAt = lastMessageAt
+        self.draftInput = draftInput
+        self.draftUpdatedAt = draftUpdatedAt
+        self.messageCount = messageCount
+        self.createdAt = createdAt
     }
 
     /// Folder name of the project ("C:\…\AXYOM - AI Development OS" -> "AXYOM - AI Development OS").
@@ -63,11 +72,14 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
             title = decrypted
         }
         var pending = entry.hasPendingPrompt ?? false
+        var draft: String?
+        var draftAt: Double?
         if let meta = entry.encryptedClientMetadata, let iv = entry.clientMetadataIv,
            let json = try? crypto.decrypt(ciphertext: meta, iv: iv),
-           let value = try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)),
-           let flag = value["hasPendingPrompt"]?.bool {
-            pending = flag
+           let value = try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)) {
+            if let flag = value["hasPendingPrompt"]?.bool { pending = flag }
+            draft = value["draftInput"]?.string
+            draftAt = value["draftUpdatedAt"]?.number
         }
         return FleetSession(
             id: entry.sessionId,
@@ -85,6 +97,8 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
             effortLevel: entry.effortLevel,
             lastReadAt: entry.lastReadAt.map { Date(timeIntervalSince1970: $0 / 1000) },
             lastMessageAt: Date(timeIntervalSince1970: entry.lastMessageAt / 1000),
+            draftInput: draft, draftUpdatedAt: draftAt, messageCount: entry.messageCount,
+            createdAt: Date(timeIntervalSince1970: entry.createdAt / 1000),
             queued: (entry.encryptedQueuedPrompts ?? []).compactMap { q in
                 (try? crypto.decrypt(ciphertext: q.encryptedPrompt, iv: q.iv)).map { QueuedPreview(id: q.id, text: $0) }
             }

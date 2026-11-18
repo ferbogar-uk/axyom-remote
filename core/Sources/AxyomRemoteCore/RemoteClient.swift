@@ -396,6 +396,43 @@ public actor RemoteClient {
         try await sendControl(sessionId: sessionId, type: "remove_queued", payload: .object(["promptId": .string(promptId)]), targetDeviceId: targetDeviceId)
     }
 
+    /// Share the composer's unsent text with the PC and other devices, the way
+    /// the desktop's own phone client does (`draftInput` in the encrypted client
+    /// metadata). Every other field already in that blob is kept: the server
+    /// stores the blob whole, so a field left out would be cleared for everyone.
+    /// An empty draft is sent explicitly (that is how "cleared" travels).
+    public func saveDraft(sessionId: String, text: String) async throws {
+        guard let socket = index else { throw ClientError.notConnected }
+        guard var current = entries[sessionId] else { throw ClientError.refused("unknown session") }
+        var meta: [String: JSONValue] = [:]
+        if let blob = current.encryptedClientMetadata, let iv = current.clientMetadataIv {
+            guard let json = try? crypto.decrypt(ciphertext: blob, iv: iv),
+                  case .object(let o)? = try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)) else {
+                throw ClientError.refused("client metadata unreadable")   // never overwrite what we cannot read
+            }
+            meta = o
+        }
+        let nowMs = (now().timeIntervalSince1970 * 1000).rounded()
+        meta["draftInput"] = .string(text)
+        meta["draftUpdatedAt"] = .number(nowMs)
+        let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys]
+        let sealed = try crypto.encrypt(String(decoding: try enc.encode(meta), as: UTF8.self))
+        var entry = SessionIndexEntry(
+            sessionId: current.sessionId, encryptedProjectId: current.encryptedProjectId, projectIdIv: current.projectIdIv,
+            encryptedTitle: current.encryptedTitle, titleIv: current.titleIv, provider: current.provider,
+            model: current.model, mode: current.mode, sessionType: current.sessionType,
+            lastMessageAt: current.lastMessageAt, createdAt: current.createdAt, updatedAt: nowMs)
+        entry.encryptedClientMetadata = sealed.ciphertext
+        entry.clientMetadataIv = sealed.iv
+        try await socket.send(ClientMessage.indexUpdate(entry).encoded())
+        current.encryptedClientMetadata = sealed.ciphertext
+        current.clientMetadataIv = sealed.iv
+        current.updatedAt = nowMs
+        entries[sessionId] = current
+        if let s = FleetSession.from(current, crypto: crypto) { sessions[sessionId] = s }
+        publish()
+    }
+
     /// Archive (or bring back) a session on the PC.
     public func archive(sessionId: String, archived: Bool = true, targetDeviceId: String?) async throws {
         try await sendControl(sessionId: sessionId, type: "archive", payload: .object(["isArchived": .bool(archived)]), targetDeviceId: targetDeviceId)
