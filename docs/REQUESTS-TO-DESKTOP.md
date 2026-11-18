@@ -96,3 +96,15 @@ cmd waits for a new date to be typed, so the command hung until its timeout and
 the reply took very long. Suggest: on Windows, tell the agent (system prompt /
 tool hint) that `date` and `time` are interactive and to use `date /t`,
 `Get-Date` or the date already in its context. Not an iPhone issue.
+
+## 6. Remove a queued prompt from the iPhone ("undo send")
+
+Ricardo wants "Undo send" like the Claude app: a queued prompt can be taken
+back before it runs. Once the desktop ingests a mobile prompt into
+`queued_prompts`, nothing the phone can send removes it (ingest only adds).
+
+Proposal: a sessionControl `messageType: "remove_queued"` with
+`payload: { promptId }`. The desktop marks that row cancelled if it is still
+`pending`, publishes the queue state again (so the phone's tray updates), and
+ignores it if the prompt already started. The phone will show "Anular" next to
+each queued prompt once this exists.
