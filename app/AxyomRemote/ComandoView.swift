@@ -276,7 +276,7 @@ struct ComandoView: View {
                 }
                 .font(.headline).foregroundStyle(pcOnline ? Theme.text : Theme.muted)
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .background(Theme.elevated, in: Capsule())
+                .background(Theme.text.opacity(0.08), in: Capsule())
             }
             .disabled(!pcOnline)
             Button { talk() } label: {
@@ -292,9 +292,8 @@ struct ComandoView: View {
             }
         }
         .padding(10)
-        .background(Theme.surface, in: Capsule())
-        .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
-        .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
-        .padding(.horizontal, 12).padding(.bottom, 6)
+        .glassBar(Capsule())
+        .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
+        .background(FrostedBackdrop())
     }
 }

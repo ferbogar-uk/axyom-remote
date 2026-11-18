@@ -339,7 +339,7 @@ struct SessionView: View {
                         Button { showCamera = true } label: { Label("Tirar foto", systemImage: "camera") }
                     } label: {
                         Image(systemName: "plus").font(.body.weight(.semibold)).foregroundStyle(Theme.text)
-                            .frame(width: 40, height: 40).background(Theme.elevated, in: Circle())
+                            .frame(width: 40, height: 40).background(Theme.text.opacity(0.08), in: Circle())
                     }
                     .accessibilityLabel("Anexar imagem")
                     modelChip
@@ -350,18 +350,17 @@ struct SessionView: View {
                     } label: {
                         Image(systemName: listener.listening && !conversation ? "stop.fill" : "mic")
                             .font(.body.weight(.semibold)).foregroundStyle(Theme.text)
-                            .frame(width: 40, height: 40).background(Theme.elevated, in: Circle())
+                            .frame(width: 40, height: 40).background(Theme.text.opacity(0.08), in: Circle())
                     }
                     .accessibilityLabel(listener.listening ? "Parar o ditado" : "Ditar")
                     actionButton
                 }
             }
             .padding(14)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(Theme.border, lineWidth: 1))
-            .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+            .glassBar(RoundedRectangle(cornerRadius: 26, style: .continuous))
         }
-        .padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 6)
+        .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
+        .background(FrostedBackdrop())
     }
 
     private var hasContent: Bool {
@@ -459,7 +458,7 @@ struct SessionView: View {
             }
             .font(.subheadline).lineLimit(1)
             .padding(.horizontal, 12).frame(minHeight: 36)
-            .background(Theme.elevated, in: Capsule())
+            .background(Theme.text.opacity(0.08), in: Capsule())
         }
         .accessibilityLabel("Modelo e esforço: \(chosenModel?.name ?? modelLabel)")
     }

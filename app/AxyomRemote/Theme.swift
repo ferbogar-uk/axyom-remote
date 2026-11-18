@@ -18,8 +18,12 @@ enum Theme {
     static let danger = Color(light: 0xD23F4B, dark: 0xFF929B)
 
     /// The orange of the brand, only for send and voice.
-    static let accent = Color(hex: 0xFF9F3D)
+    static let accent = Color(hex: 0xFF8A1F)   // brand orange, more saturated (Ricardo, 18 Nov)
     static let onAccent = Color(hex: 0x0B0B0C)
+
+    /// Frosted glass tints: graphite band behind the floating bars, grey for the bars.
+    static let graphiteGlass = Color(light: 0xE6E9ED, dark: 0x16171A)
+    static let barGlass = Color(light: 0xFFFFFF, dark: 0x2A2B2F)
 
     // Aliases from the first (amber-heavy) design, now neutral.
     static let amber = text

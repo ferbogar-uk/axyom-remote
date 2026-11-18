@@ -185,3 +185,11 @@ Update (2026-11-18, 17:00), autonomous batch 6:
   the box when it is empty.
 - Session info ("…" > Informação da sessão): project, folder, PC, agent, model,
   effort, state, messages, queue, created, last activity, copy the session id.
+
+Update (2026-11-18, 17:10), Ricardo's request: frosted glass.
+- A graphite frosted band runs from the floating bar to the bottom edge, full
+  width (home and session): content scrolling under it is blurred, visible but
+  not readable; it fades in at the top. Solid with Reduce Transparency.
+- The bars themselves are grey frosted glass, mostly opaque, with a faint edge.
+- Orange is now #FF8A1F (more saturated than the brand #FF9F3D), still only on
+  send and voice.
