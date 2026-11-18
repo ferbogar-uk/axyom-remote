@@ -5,7 +5,6 @@ import AxyomRemoteCore
 /// First screen: scan the QR the desktop shows, or paste the code.
 struct PairingView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var attempt = 0
     @State private var pasting = false
     @State private var pasted = ""
     @State private var cameraDenied = AVCaptureDevice.authorizationStatus(for: .video) == .denied
@@ -26,9 +25,7 @@ struct PairingView: View {
                 } else {
                     QRScannerView { code in
                         model.pair(code: code)
-                        if model.pairingError != nil { attempt += 1 }
                     }
-                    .id(attempt)
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 }
             }
@@ -133,5 +130,8 @@ final class ScannerController: UIViewController, AVCaptureMetadataOutputObjectsD
               let text = (objects.first as? AVMetadataMachineReadableCodeObject)?.stringValue else { return }
         finished = true
         onCode?(text)
+        // A wrong code stays in front of the camera: wait before reading again
+        // so the error message does not flash on every frame.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.finished = false }
     }
 }

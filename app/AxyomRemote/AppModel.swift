@@ -34,8 +34,12 @@ final class AppModel: ObservableObject {
             try PairingKeychain.save(payload)
             pairingError = nil
             connect(payload)
+        } catch PairingPayload.ParseError.notAxyomCode {
+            pairingError = "Este código não é do AXYOM Remote. O QR do ecrã de Sincronização do PC é o formato antigo do Nimbalyst; o PC ainda tem de mostrar o código novo (axyom-pair)."
+        } catch PairingPayload.ParseError.expired {
+            pairingError = "Este código já expirou. Gera outro no PC."
         } catch {
-            pairingError = "Este código não é válido ou já expirou. Gera outro no PC."
+            pairingError = "Este código não é válido. Gera outro no PC."
         }
     }
 
