@@ -50,6 +50,18 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             | tee "$RUNNER_TEMP/archive.log" | tail -n 40
+      - name: Carry the push entitlement into the archive
+        run: |
+          # An unsigned archive carries no entitlements, so the export would
+          # sign the app without aps-environment and push could never register.
+          # Ad-hoc sign it with the app's entitlements; the export re-signs it
+          # for the App Store and keeps them.
+          app="$RUNNER_TEMP/AxyomRemote.xcarchive/Products/Applications/AxyomRemote.app"
+          ent="$GITHUB_WORKSPACE/app/AxyomRemote/AxyomRemote.entitlements"
+          test -f "$ent" || { echo "::error::entitlements file missing"; exit 1; }
+          codesign --force --sign - --entitlements "$ent" --timestamp=none "$app"
+          codesign -d --entitlements :- "$app" 2>/dev/null | tee "$RUNNER_TEMP/ent.xml"
+          grep -q "aps-environment" "$RUNNER_TEMP/ent.xml" || { echo "::error::aps-environment not in the archived app"; exit 1; }
       - name: Export and upload to TestFlight
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}

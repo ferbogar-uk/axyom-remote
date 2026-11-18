@@ -28,6 +28,11 @@ targets:
       - AxyomRemote
     dependencies:
       - package: AxyomRemoteCore
+    # Push notifications (AXYOM sync server sends APNs alerts; App ID has Push on).
+    entitlements:
+      path: AxyomRemote/AxyomRemote.entitlements
+      properties:
+        aps-environment: production
     # Extra Info.plist keys, merged with the generated ones (GENERATE_INFOPLIST_FILE).
     info:
       path: AxyomRemote/Info.plist
