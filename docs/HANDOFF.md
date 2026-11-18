@@ -97,6 +97,40 @@ yourself; he pastes them. Never print secret values.
 If you need a protocol or server change, write it in
 `docs/REQUESTS-TO-DESKTOP.md` and tell Ricardo; do not edit the other repos.
 
+### 6a. Delivered by the desktop session (18 Nov 2026)
+
+- **Pairing QR**: Settings > Sync > Pair a device shows `axyom-pair:1:<base64url JSON>`
+  with sorted keys `desktopName, issuedAt, key, member, org, seed, server`
+  (`server` = `https://axyom-sync.axyom.workers.dev`, `org` = `axyom`,
+  `member` = `owner`). Renewed 30 s before the 10-minute limit; "Copy code"
+  gives the same text for the paste sheet. Not yet scanned by a real phone.
+- **Plan usage** (server live, smoke-tested; desktop publishes every minute
+  when it changes, else every 10 min):
+  - In the index room the phone receives
+    `planUsageBroadcast { deviceId, encryptedUsage, usageIv, updatedAt }`,
+    live and also right after every `indexSyncResponse` (one per desktop).
+  - Decrypt `encryptedUsage`/`usageIv` exactly like message content
+    (AES-GCM, same key; base64 ciphertext‖tag, base64 12-byte IV).
+  - Plaintext JSON:
+    ```json
+    { "v": 1, "desktopName": "LAPTOP-X", "updatedAt": 1763443200000,
+      "plans": [
+        { "id": "claude", "label": "Claude", "percent": 31,
+          "windows": [ { "name": "5h", "percent": 31, "resetsAt": "2026-11-18T10:00:00Z" },
+                       { "name": "week", "percent": 12, "resetsAt": null } ] },
+        { "id": "codex", "label": "Codex", "percent": 33, "windows": [] },
+        { "id": "grok", "label": "Grok", "percent": 1, "windows": [] },
+        { "id": "opencode-go", "label": "OC Go", "percent": 22, "windows": [] } ] }
+    ```
+    `percent` 0-100 is the headline (the most-used window). `windows[].name` is
+    `5h`, `week`, `month`, `period`, `weekly`… or a model name. A plan with no
+    data is left out. Show "updated X min ago" from `updatedAt`.
+- **Which PC has a project**: desktops on the AXYOM server add
+  `syncedProjectIds: [String]` to their `DeviceInfo` in `devicesList`/`deviceJoined`.
+  Each value is the same ciphertext as an index entry's `encryptedProjectId`,
+  so `device.syncedProjectIds.contains(entry.encryptedProjectId)` tells you
+  which computer to send a new session to. Absent = not reported.
+
 ## 7. Next steps (in order)
 
 1. **Design pass** (no macOS minutes): use `impeccable` (native iOS refs),

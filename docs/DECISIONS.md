@@ -28,3 +28,10 @@ Mockups: AXYOM iOS — 3 conceitos (Claude artifact).
 The phone speaks the CollabV3 wire protocol of the AXYOM desktop against the
 owner's sync server (`axyom-backend/sync`). Crypto parameters are pinned by
 `docs/test-vectors.json`, generated with the desktop's own WebCrypto code.
+
+## 2026-11-18 - Voice conversation (Ricardo, by voice call)
+
+- **Talk mode, not a command box.** Tap the mic button and the app holds a spoken conversation, like a voice call with Claude: it listens, answers aloud, listens again. No wake word, and the microphone is open only while the conversation is open (not always listening, like Siri but only inside the app).
+- **First version uses the iPhone's own speech** (on-device recognition, system voice). Ricardo agreed to start there. Swapping to Azure neural voices (as AVA does, see docs/VOICE-FROM-AVA.md) is a possible later step if the system voice sounds too robotic; that needs a new Azure key kept on a server, never in this public repo.
+- **Honest limit for now:** the conversation can answer what is waiting or running and start new sessions on the PC. Approving and replying to a session need the desktop payloads (HANDOFF section 8) and are not available yet.
+- Not built yet: the speaking side (text to speech) and the back-and-forth loop. Today the voice screen only listens, shows what it understood, and asks to confirm.

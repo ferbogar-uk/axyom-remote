@@ -70,10 +70,77 @@ public struct SessionIndexEntry: Codable, Equatable, Sendable {
     public var updatedAt: Double
     public var isExecuting: Bool?
     public var queuedPromptCount: Int?
+    public var encryptedQueuedPrompts: [EncryptedQueuedPrompt]?
+    /// Plaintext effort of the session (absent = the desktop default).
+    public var effortLevel: String?
     public var hasPendingPrompt: Bool?
     public var encryptedClientMetadata: String?
     public var clientMetadataIv: String?
     public var lastReadAt: Double?
+}
+
+/// A prompt waiting in a session's queue (IndexEncryptedQueuedPrompt in
+/// collab-protocol). The phone sends a reply by putting one of these on the
+/// session's index entry; the desktop ingests it into its queued_prompts table.
+public struct EncryptedQueuedPrompt: Codable, Equatable, Sendable {
+    public var id: String
+    public var encryptedPrompt: String
+    public var iv: String
+    public var timestamp: Double
+    public var source: String?
+    public var encryptedAttachments: [EncryptedAttachment]?
+    /// Model / effort / mode to apply right before this prompt runs (desktop request #4).
+    public var options: PromptOptions?
+
+    public init(id: String, encryptedPrompt: String, iv: String, timestamp: Double, source: String? = nil, encryptedAttachments: [EncryptedAttachment]? = nil, options: PromptOptions? = nil) {
+        self.id = id
+        self.encryptedPrompt = encryptedPrompt
+        self.iv = iv
+        self.timestamp = timestamp
+        self.source = source
+        self.encryptedAttachments = encryptedAttachments
+        self.options = options
+    }
+
+    private enum CodingKeys: String, CodingKey { case id, encryptedPrompt, iv, timestamp, source, encryptedAttachments, options }
+
+    /// Attachments are read leniently: a malformed one must not make the whole
+    /// index entry (and with it the session list) undecodable.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        encryptedPrompt = try c.decode(String.self, forKey: .encryptedPrompt)
+        iv = try c.decode(String.self, forKey: .iv)
+        timestamp = try c.decode(Double.self, forKey: .timestamp)
+        source = try? c.decodeIfPresent(String.self, forKey: .source)
+        encryptedAttachments = try? c.decodeIfPresent([EncryptedAttachment].self, forKey: .encryptedAttachments)
+        options = try? c.decodeIfPresent(PromptOptions.self, forKey: .options)
+    }
+}
+
+/// Per-prompt choices the desktop applies before running it.
+public struct PromptOptions: Codable, Equatable, Sendable {
+    public var model: String?
+    public var effortLevel: String?
+    public var mode: String?
+    public init(model: String? = nil, effortLevel: String? = nil, mode: String? = nil) {
+        self.model = model; self.effortLevel = effortLevel; self.mode = mode
+    }
+    public var isEmpty: Bool { model == nil && effortLevel == nil && mode == nil }
+}
+
+/// An image sent with a prompt. `encryptedData` is the image bytes sealed with
+/// AES-GCM (ciphertext||tag, base64); the desktop decrypts it in
+/// `decryptMobileAttachments` (SyncManager.ts) and saves it for the agent.
+public struct EncryptedAttachment: Codable, Equatable, Sendable {
+    public var id: String
+    public var filename: String
+    public var mimeType: String
+    public var encryptedData: String
+    public var iv: String
+    public var size: Int
+    public var width: Int?
+    public var height: Int?
 }
 
 public struct DeviceInfo: Codable, Equatable, Sendable {
@@ -87,6 +154,9 @@ public struct DeviceInfo: Codable, Equatable, Sendable {
     public var isFocused: Bool?
     public var status: String?
     public var isOnline: Bool?
+    /// Desktops on the AXYOM server list the projects they hold, as the same
+    /// ciphertext as an index entry's `encryptedProjectId`. Absent = not reported.
+    public var syncedProjectIds: [String]?
 
     public init(deviceId: String, name: String, type: String, platform: String, appVersion: String? = nil, connectedAt: Double, lastActiveAt: Double, isFocused: Bool? = nil, status: String? = nil) {
         self.deviceId = deviceId
@@ -125,6 +195,8 @@ public enum ServerMessage: Equatable, Sendable {
     case deviceLeft(deviceId: String)
     case createSessionResponse(requestId: String, success: Bool, sessionId: String?, error: String?)
     case error(code: String, message: String, requestId: String?)
+    /// A desktop's plan usage (Claude, Codex, ...), encrypted like message content.
+    case planUsageBroadcast(deviceId: String, encryptedUsage: String, usageIv: String, updatedAt: Double?)
     case pong
     /// A message type this build does not handle yet (kept so it is visible, not dropped silently).
     case unhandled(type: String)
@@ -143,6 +215,7 @@ public enum ServerMessage: Equatable, Sendable {
         struct R: Decodable { let requestId: String; let success: Bool; let sessionId: String?; let error: String? }
         let response: R
     }
+    private struct Usage: Decodable { let deviceId: String; let encryptedUsage: String; let usageIv: String; let updatedAt: Double? }
     private struct Err: Decodable { let code: String; let message: String; let requestId: String? }
 
     public static func decode(_ text: String) throws -> ServerMessage {
@@ -167,6 +240,9 @@ public enum ServerMessage: Equatable, Sendable {
         case "error":
             let e = try d.decode(Err.self, from: data)
             return .error(code: e.code, message: e.message, requestId: e.requestId)
+        case "planUsageBroadcast":
+            let u = try d.decode(Usage.self, from: data)
+            return .planUsageBroadcast(deviceId: u.deviceId, encryptedUsage: u.encryptedUsage, usageIv: u.usageIv, updatedAt: u.updatedAt)
         case "pong": return .pong
         default: return .unhandled(type: type)
         }
@@ -178,6 +254,10 @@ public enum ClientMessage: Equatable, Sendable {
     case indexSyncRequest
     case deviceAnnounce(DeviceInfo)
     case createSessionRequest(CreateSessionRequest, targetDeviceId: String?)
+    /// Generic control message relayed to the PC (cancel, prompt_response, ...). The payload travels as plain JSON.
+    case sessionControl(sessionId: String, messageType: String, payload: JSONValue?, sentByDeviceId: String, targetDeviceId: String?, timestamp: Double)
+    /// Write (part of) a session's index entry. Omitted fields keep their stored value.
+    case indexUpdate(SessionIndexEntry)
     case ping
 
     public func encoded() throws -> String {
@@ -195,6 +275,16 @@ public enum ClientMessage: Equatable, Sendable {
             var o: [String: JSONValue] = ["type": .string("createSessionRequest"), "request": try JSONValue.from(request)]
             if let target { o["targetDeviceId"] = .string(target) }
             object = o
+        case .sessionControl(let sessionId, let messageType, let payload, let sentBy, let target, let timestamp):
+            var m: [String: JSONValue] = [
+                "sessionId": .string(sessionId), "messageType": .string(messageType),
+                "timestamp": .number(timestamp), "sentBy": .string("mobile"), "sentByDeviceId": .string(sentBy),
+            ]
+            if let payload { m["payload"] = payload }
+            if let target { m["targetDeviceId"] = .string(target) }
+            object = ["type": .string("sessionControl"), "message": .object(m)]
+        case .indexUpdate(let entry):
+            object = ["type": .string("indexUpdate"), "session": try JSONValue.from(entry)]
         case .ping:
             object = ["type": .string("ping")]
         }

@@ -10,9 +10,23 @@ public protocol SyncSocket: AnyObject, Sendable {
 
 public typealias SyncSocketFactory = @Sendable (URL) async throws -> SyncSocket
 
+/// An image to send with a prompt (already compressed by the app, usually JPEG).
+public struct PromptImage: Equatable, Sendable, Identifiable {
+    public var id: String
+    public var filename: String
+    public var mimeType: String
+    public var data: Data
+    public var width: Int?
+    public var height: Int?
+
+    public init(id: String = UUID().uuidString.lowercased(), filename: String, mimeType: String = "image/jpeg", data: Data, width: Int? = nil, height: Int? = nil) {
+        self.id = id; self.filename = filename; self.mimeType = mimeType; self.data = data; self.width = width; self.height = height
+    }
+}
+
 /// One transcript row after decryption. `text` is a best-effort readable
 /// rendering; `raw` keeps the desktop's content for richer views later.
-public struct TranscriptItem: Equatable, Sendable, Identifiable {
+public struct TranscriptItem: Codable, Equatable, Sendable, Identifiable {
     public var id: String
     public var sequence: Int
     public var createdAt: Date
@@ -34,6 +48,9 @@ public actor RemoteClient {
         public var lastError: String?
         /// Rows the phone could not decrypt (written under another key).
         public var unreadableRows = 0
+        /// Plan usage per desktop (latest broadcast each), newest first.
+        public var planUsage: [PlanUsage] = []
+        public init() {}
     }
 
     public enum ClientError: Error, Equatable {
@@ -55,9 +72,24 @@ public actor RemoteClient {
     private var stopped = false
     private var backoff: Double = 1
     private var sessions: [String: FleetSession] = [:]
+    /// The encrypted index rows as the server sent them, so a reply can be
+    /// written back without re-encrypting fields the phone cannot rebuild.
+    private var entries: [String: SessionIndexEntry] = [:]
     private var devices: [String: DeviceInfo] = [:]
+    private var usage: [String: PlanUsage] = [:]
     private var snapshot = Snapshot()
     private var onChange: (@Sendable (Snapshot) -> Void)?
+    private var cache: OfflineCache?
+
+    /// Use an on-device cache: shows the last known sessions straight away (even
+    /// with no network) and keeps it up to date as the index changes.
+    public func useCache(_ cache: OfflineCache) {
+        self.cache = cache
+        guard sessions.isEmpty else { return }
+        let saved = cache.loadIndex()
+        for e in saved { if let s = FleetSession.from(e, crypto: crypto) { sessions[s.id] = s; entries[s.id] = e } }
+        if !saved.isEmpty { publish() }
+    }
     private var pendingCreates: [String: CheckedContinuation<String, Error>] = [:]
 
     public init(
@@ -125,7 +157,7 @@ public actor RemoteClient {
                     if let msg = try? ServerMessage.decode(text) { handleIndex(msg) }
                 }
             } catch {
-                snapshot.lastError = "\(error)"
+                snapshot.lastError = ConnectionMessage.from(error)
             }
             pinger?.cancel(); pinger = nil
             index = nil
@@ -158,6 +190,8 @@ public actor RemoteClient {
     private func publish() {
         snapshot.sessions = sessions.values.sorted { $0.lastActivity > $1.lastActivity }
         snapshot.devices = devices.values.sorted { $0.name < $1.name }
+        snapshot.planUsage = usage.values.sorted { $0.updatedAt > $1.updatedAt }
+        cache?.saveIndex(Array(entries.values))
         onChange?(snapshot)
     }
 
@@ -167,15 +201,17 @@ public actor RemoteClient {
         switch msg {
         case .indexSyncResponse(let entries):
             sessions = [:]
+            self.entries = [:]
             var unreadable = 0
             for e in entries {
-                if let s = FleetSession.from(e, crypto: crypto) { sessions[s.id] = s } else { unreadable += 1 }
+                if let s = FleetSession.from(e, crypto: crypto) { sessions[s.id] = s; self.entries[s.id] = e } else { unreadable += 1 }
             }
             snapshot.unreadableRows = unreadable
         case .indexBroadcast(let e):
-            if let s = FleetSession.from(e, crypto: crypto) { sessions[s.id] = s }
+            if let s = FleetSession.from(e, crypto: crypto) { sessions[s.id] = s; entries[s.id] = e }
         case .indexDeleteBroadcast(let id):
             sessions[id] = nil
+            entries[id] = nil
         case .devicesList(let list):
             devices = Dictionary(list.filter { $0.deviceId != device.deviceId }.map { ($0.deviceId, $0) }, uniquingKeysWith: { a, _ in a })
         case .deviceJoined(let d):
@@ -188,8 +224,12 @@ public actor RemoteClient {
                 else { cont.resume(throwing: ClientError.refused(error ?? "the desktop refused")) }
             }
             return
+        case .planUsageBroadcast(let deviceId, let encrypted, let iv, _):
+            guard let u = PlanUsage.decrypt(deviceId: deviceId, encryptedUsage: encrypted, usageIv: iv, crypto: crypto) else { return }
+            usage[deviceId] = u
         case .error(let code, let message, _):
-            snapshot.lastError = "\(code): \(message)"
+            snapshot.lastError = code.lowercased().contains("auth") ? "O servidor recusou este iPhone. Emparelha de novo." : "O servidor devolveu um erro"
+            _ = message
         default:
             return
         }
@@ -221,6 +261,196 @@ public actor RemoteClient {
         return try await withCheckedThrowingContinuation { pendingCreates[requestId] = $0 }
     }
 
+    /// Answer a tool-permission prompt on the PC. `scope` is once, session, always or always-all.
+    public func respondToPermission(sessionId: String, promptId: String, allow: Bool, scope: String = "once", targetDeviceId: String?) async throws {
+        let payload: JSONValue = .object([
+            "promptType": .string("tool_permission"),
+            "promptId": .string(promptId),
+            "response": .object(["decision": .string(allow ? "allow" : "deny"), "scope": .string(scope)]),
+        ])
+        try await sendControl(sessionId: sessionId, type: "prompt_response", payload: payload, targetDeviceId: targetDeviceId)
+    }
+
+    /// Answer an AskUserQuestion prompt. `answers` maps each question text to the chosen label(s).
+    public func answerQuestion(sessionId: String, questionId: String, answers: [String: String], cancelled: Bool = false, targetDeviceId: String?) async throws {
+        var response: [String: JSONValue] = ["answers": .object(answers.mapValues { .string($0) })]
+        if cancelled { response["cancelled"] = .bool(true) }
+        let payload: JSONValue = .object([
+            "promptType": .string("ask_user_question"),
+            "promptId": .string(questionId),
+            "response": .object(response),
+        ])
+        try await sendControl(sessionId: sessionId, type: "prompt_response", payload: payload, targetDeviceId: targetDeviceId)
+    }
+
+    /// Approve or reject a plan (ExitPlanMode). Feedback travels only when rejecting.
+    public func respondToPlan(sessionId: String, promptId: String, approved: Bool, feedback: String? = nil, targetDeviceId: String?) async throws {
+        var response: [String: JSONValue] = ["approved": .bool(approved)]
+        if !approved, let feedback, !feedback.isEmpty { response["feedback"] = .string(feedback) }
+        let payload: JSONValue = .object([
+            "promptType": .string("exit_plan_mode"),
+            "promptId": .string(promptId),
+            "response": .object(response),
+        ])
+        try await sendControl(sessionId: sessionId, type: "prompt_response", payload: payload, targetDeviceId: targetDeviceId)
+    }
+
+    /// Send a text reply into a session, the way the desktop's own iOS client does:
+    /// an `indexUpdate` that carries one encrypted queued prompt (the desktop puts
+    /// it in its queue and runs it), then a `prompt` control to nudge it to start.
+    /// Returns the prompt id.
+    @discardableResult
+    public func sendPrompt(sessionId: String, text: String, images: [PromptImage] = [], options: PromptOptions? = nil, source: String = "keyboard", targetDeviceId: String?) async throws -> String {
+        guard let socket = index else { throw ClientError.notConnected }
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty && !images.isEmpty { trimmed = images.count == 1 ? "Vê a imagem em anexo." : "Vê as imagens em anexo." }
+        guard !trimmed.isEmpty else { throw ClientError.refused("empty prompt") }
+        guard let current = entries[sessionId] else { throw ClientError.refused("unknown session") }
+        let promptId = UUID().uuidString.lowercased()
+        let nowMs = (now().timeIntervalSince1970 * 1000).rounded()
+        let sealed = try crypto.encrypt(trimmed)
+        let attachments = try images.map { img -> EncryptedAttachment in
+            let s = try crypto.encryptData(img.data)
+            return EncryptedAttachment(id: img.id, filename: img.filename, mimeType: img.mimeType, encryptedData: s.ciphertext,
+                                       iv: s.iv, size: img.data.count, width: img.width, height: img.height)
+        }
+        let queued = EncryptedQueuedPrompt(id: promptId, encryptedPrompt: sealed.ciphertext, iv: sealed.iv, timestamp: nowMs, source: source,
+                                           encryptedAttachments: attachments.isEmpty ? nil : attachments,
+                                           options: (options?.isEmpty ?? true) ? nil : options)
+        let entry = SessionIndexEntry(
+            sessionId: current.sessionId,
+            encryptedProjectId: current.encryptedProjectId,
+            projectIdIv: current.projectIdIv,
+            encryptedTitle: current.encryptedTitle,
+            titleIv: current.titleIv,
+            provider: current.provider,
+            model: current.model,
+            mode: current.mode,
+            sessionType: current.sessionType,
+            lastMessageAt: nowMs,
+            createdAt: current.createdAt,
+            updatedAt: nowMs,
+            queuedPromptCount: 1,
+            encryptedQueuedPrompts: [queued]
+        )
+        try await socket.send(ClientMessage.indexUpdate(entry).encoded())
+        try await sendControl(sessionId: sessionId, type: "prompt", payload: nil, targetDeviceId: targetDeviceId ?? current.hostDeviceId)
+        return promptId
+    }
+
+    /// Commit (or cancel) a git commit proposal. `files` and `message` are what the user confirmed.
+    public func respondToCommit(sessionId: String, proposalId: String, commit: Bool, files: [String], message: String, targetDeviceId: String?) async throws {
+        var response: [String: JSONValue] = ["action": .string(commit ? "committed" : "cancelled")]
+        if commit {
+            response["files"] = .array(files.map { .string($0) })
+            response["message"] = .string(message)
+        }
+        let payload: JSONValue = .object([
+            "promptType": .string("git_commit"),
+            "promptId": .string(proposalId),
+            "response": .object(response),
+        ])
+        try await sendControl(sessionId: sessionId, type: "prompt_response", payload: payload, targetDeviceId: targetDeviceId)
+    }
+
+    /// "Send now": stop the turn that is running, then nudge the PC to run the
+    /// queue straight away, so the prompt you just queued runs next (the desktop
+    /// does the same for its own "send now" button: stop, then drive the queue).
+    public func sendNow(sessionId: String, targetDeviceId: String?) async throws {
+        try await sendControl(sessionId: sessionId, type: "cancel", payload: nil, targetDeviceId: targetDeviceId)
+        await sleep(0.8)
+        try await sendControl(sessionId: sessionId, type: "prompt", payload: nil, targetDeviceId: targetDeviceId)
+    }
+
+    /// Ask the server for the whole session list again (pull to refresh).
+    public func refreshIndex() async throws {
+        guard let socket = index else { throw ClientError.notConnected }
+        try await socket.send(ClientMessage.indexSyncRequest.encoded())
+    }
+
+    /// Mark a session read on every device: an `indexUpdate` carrying only the
+    /// identity fields and `lastReadAt`, as the desktop's own phone client does.
+    /// `messageCount`, execution state and the queue are left out on purpose:
+    /// omitted fields keep their stored value.
+    public func markRead(sessionId: String) async throws {
+        guard let socket = index else { throw ClientError.notConnected }
+        guard var current = entries[sessionId] else { throw ClientError.refused("unknown session") }
+        let nowMs = (now().timeIntervalSince1970 * 1000).rounded()
+        if let read = current.lastReadAt, read >= current.lastMessageAt { return }
+        let entry = SessionIndexEntry(
+            sessionId: current.sessionId, encryptedProjectId: current.encryptedProjectId, projectIdIv: current.projectIdIv,
+            encryptedTitle: current.encryptedTitle, titleIv: current.titleIv, provider: current.provider,
+            model: current.model, mode: current.mode, sessionType: current.sessionType,
+            lastMessageAt: current.lastMessageAt, createdAt: current.createdAt, updatedAt: current.updatedAt,
+            lastReadAt: nowMs)
+        try await socket.send(ClientMessage.indexUpdate(entry).encoded())
+        current.lastReadAt = nowMs
+        entries[sessionId] = current
+        if let s = FleetSession.from(current, crypto: crypto) { sessions[sessionId] = s }
+        publish()
+    }
+
+    /// Take a queued prompt back before it runs ("Anular"). The PC drops it if it
+    /// has not started and republishes the queue; there is no direct reply.
+    public func removeQueued(sessionId: String, promptId: String, targetDeviceId: String?) async throws {
+        try await sendControl(sessionId: sessionId, type: "remove_queued", payload: .object(["promptId": .string(promptId)]), targetDeviceId: targetDeviceId)
+    }
+
+    /// Share the composer's unsent text with the PC and other devices, the way
+    /// the desktop's own phone client does (`draftInput` in the encrypted client
+    /// metadata). Every other field already in that blob is kept: the server
+    /// stores the blob whole, so a field left out would be cleared for everyone.
+    /// An empty draft is sent explicitly (that is how "cleared" travels).
+    public func saveDraft(sessionId: String, text: String) async throws {
+        guard let socket = index else { throw ClientError.notConnected }
+        guard var current = entries[sessionId] else { throw ClientError.refused("unknown session") }
+        var meta: [String: JSONValue] = [:]
+        if let blob = current.encryptedClientMetadata, let iv = current.clientMetadataIv {
+            guard let json = try? crypto.decrypt(ciphertext: blob, iv: iv),
+                  case .object(let o)? = try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)) else {
+                throw ClientError.refused("client metadata unreadable")   // never overwrite what we cannot read
+            }
+            meta = o
+        }
+        let nowMs = (now().timeIntervalSince1970 * 1000).rounded()
+        meta["draftInput"] = .string(text)
+        meta["draftUpdatedAt"] = .number(nowMs)
+        let enc = JSONEncoder(); enc.outputFormatting = [.sortedKeys]
+        let sealed = try crypto.encrypt(String(decoding: try enc.encode(meta), as: UTF8.self))
+        var entry = SessionIndexEntry(
+            sessionId: current.sessionId, encryptedProjectId: current.encryptedProjectId, projectIdIv: current.projectIdIv,
+            encryptedTitle: current.encryptedTitle, titleIv: current.titleIv, provider: current.provider,
+            model: current.model, mode: current.mode, sessionType: current.sessionType,
+            lastMessageAt: current.lastMessageAt, createdAt: current.createdAt, updatedAt: nowMs)
+        entry.encryptedClientMetadata = sealed.ciphertext
+        entry.clientMetadataIv = sealed.iv
+        try await socket.send(ClientMessage.indexUpdate(entry).encoded())
+        current.encryptedClientMetadata = sealed.ciphertext
+        current.clientMetadataIv = sealed.iv
+        current.updatedAt = nowMs
+        entries[sessionId] = current
+        if let s = FleetSession.from(current, crypto: crypto) { sessions[sessionId] = s }
+        publish()
+    }
+
+    /// Archive (or bring back) a session on the PC.
+    public func archive(sessionId: String, archived: Bool = true, targetDeviceId: String?) async throws {
+        try await sendControl(sessionId: sessionId, type: "archive", payload: .object(["isArchived": .bool(archived)]), targetDeviceId: targetDeviceId)
+    }
+
+    /// Ask the PC to stop what the session is doing.
+    public func cancel(sessionId: String, targetDeviceId: String?) async throws {
+        try await sendControl(sessionId: sessionId, type: "cancel", payload: nil, targetDeviceId: targetDeviceId)
+    }
+
+    private func sendControl(sessionId: String, type: String, payload: JSONValue?, targetDeviceId: String?) async throws {
+        guard let socket = index else { throw ClientError.notConnected }
+        let message = ClientMessage.sessionControl(sessionId: sessionId, messageType: type, payload: payload,
+                                                   sentByDeviceId: device.deviceId, targetDeviceId: targetDeviceId,
+                                                   timestamp: now().timeIntervalSince1970 * 1000)
+        try await socket.send(message.encoded())
+    }
+
     private func expire(_ requestId: String) {
         pendingCreates.removeValue(forKey: requestId)?.resume(throwing: ClientError.timeout)
     }
@@ -231,14 +461,69 @@ public actor RemoteClient {
         for (_, c) in all { c.resume(throwing: error) }
     }
 
+    /// Keep a session room open and stream its rows as they are written: first
+    /// every row after `afterSequence` (paged), then each new row the server
+    /// broadcasts, with no polling delay. The stream ends (throws) when the
+    /// socket drops; the caller reconnects from its last sequence.
+    public nonisolated func liveTranscript(sessionId: String, afterSequence: Int?) -> AsyncThrowingStream<[TranscriptItem], Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task { await self.runLive(sessionId: sessionId, afterSequence: afterSequence, continuation: continuation) }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func runLive(sessionId: String, afterSequence: Int?, continuation: AsyncThrowingStream<[TranscriptItem], Error>.Continuation) async {
+        let room = RoomIds.session(org: pairing.org, member: pairing.member, sessionId: sessionId)
+        guard let u = url(room: room) else { continuation.finish(throwing: ClientError.refused("bad server address")); return }
+        let socket: SyncSocket
+        do { socket = try await factory(u) } catch { continuation.finish(throwing: error); return }
+        let sleep = self.sleep
+        let pinger = Task {
+            while !Task.isCancelled {
+                await sleep(25)
+                if Task.isCancelled { break }
+                try? await socket.send(ClientMessage.ping.encoded())
+            }
+        }
+        defer { pinger.cancel(); socket.close() }
+        do {
+            var since = afterSequence
+            var catchingUp = true
+            try await socket.send(ClientMessage.syncRequest(sinceSeq: since).encoded())
+            while !Task.isCancelled {
+                let msg = try ServerMessage.decode(try await socket.receive())
+                switch msg {
+                case .syncResponse(let messages, _, let hasMore, let cursor):
+                    let items = messages.compactMap { Self.decryptRow($0, crypto: crypto) }
+                    if !items.isEmpty { continuation.yield(items) }
+                    if catchingUp, hasMore, let c = cursor, let n = Int(c) {
+                        since = n
+                        try await socket.send(ClientMessage.syncRequest(sinceSeq: since).encoded())
+                    } else {
+                        catchingUp = false
+                    }
+                case .messageBroadcast(let m):
+                    if let item = Self.decryptRow(m, crypto: crypto) { continuation.yield([item]) }
+                case .error(let code, let message, _):
+                    throw ClientError.refused("\(code): \(message)")
+                default:
+                    continue
+                }
+            }
+            continuation.finish()
+        } catch {
+            continuation.finish(throwing: error)
+        }
+    }
+
     /// Read a whole transcript (all pages) from the session room, then close it.
-    public func loadTranscript(sessionId: String) async throws -> [TranscriptItem] {
+    public func loadTranscript(sessionId: String, afterSequence: Int? = nil) async throws -> [TranscriptItem] {
         let room = RoomIds.session(org: pairing.org, member: pairing.member, sessionId: sessionId)
         guard let u = url(room: room) else { throw ClientError.refused("bad server address") }
         let socket = try await factory(u)
         defer { socket.close() }
         var items: [TranscriptItem] = []
-        var since: Int?
+        var since: Int? = afterSequence
         while true {
             try await socket.send(ClientMessage.syncRequest(sinceSeq: since).encoded())
             var page: ServerMessage?

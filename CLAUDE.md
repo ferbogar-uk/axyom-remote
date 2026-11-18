@@ -9,6 +9,11 @@ Read `docs/HANDOFF.md` first, then `docs/DECISIONS.md`.
 - Honest status: never ship UI that only looks like it works; say what is untested.
 - No secrets in this repo (it is public). Never type or print credentials;
   Ricardo pastes them into GitHub secrets himself.
-- TestFlight uploads only with Ricardo's explicit OK.
+- TestFlight uploads only with Ricardo's explicit OK. Standing OK (18 Nov
+  2026): upload once Linux tests and the iOS compile are green.
+- Autonomous development (Ricardo, 18 Nov 2026): when one item is done, start
+  the next recommended one without asking. Report what was done after each
+  build. Still stop and ask for anything that changes his PC, spends money,
+  sends data out, or touches `main`.
 - Do not edit `axyom-v01` or `axyom-backend`; put requests in
   `docs/REQUESTS-TO-DESKTOP.md`.
