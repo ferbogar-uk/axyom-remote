@@ -288,7 +288,7 @@ public actor RemoteClient {
     /// it in its queue and runs it), then a `prompt` control to nudge it to start.
     /// Returns the prompt id.
     @discardableResult
-    public func sendPrompt(sessionId: String, text: String, images: [PromptImage] = [], source: String = "keyboard", targetDeviceId: String?) async throws -> String {
+    public func sendPrompt(sessionId: String, text: String, images: [PromptImage] = [], options: PromptOptions? = nil, source: String = "keyboard", targetDeviceId: String?) async throws -> String {
         guard let socket = index else { throw ClientError.notConnected }
         var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty && !images.isEmpty { trimmed = images.count == 1 ? "Vê a imagem em anexo." : "Vê as imagens em anexo." }
@@ -303,7 +303,8 @@ public actor RemoteClient {
                                        iv: s.iv, size: img.data.count, width: img.width, height: img.height)
         }
         let queued = EncryptedQueuedPrompt(id: promptId, encryptedPrompt: sealed.ciphertext, iv: sealed.iv, timestamp: nowMs, source: source,
-                                           encryptedAttachments: attachments.isEmpty ? nil : attachments)
+                                           encryptedAttachments: attachments.isEmpty ? nil : attachments,
+                                           options: (options?.isEmpty ?? true) ? nil : options)
         let entry = SessionIndexEntry(
             sessionId: current.sessionId,
             encryptedProjectId: current.encryptedProjectId,

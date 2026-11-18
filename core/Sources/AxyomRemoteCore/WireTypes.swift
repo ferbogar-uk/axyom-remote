@@ -71,6 +71,8 @@ public struct SessionIndexEntry: Codable, Equatable, Sendable {
     public var isExecuting: Bool?
     public var queuedPromptCount: Int?
     public var encryptedQueuedPrompts: [EncryptedQueuedPrompt]?
+    /// Plaintext effort of the session (absent = the desktop default).
+    public var effortLevel: String?
     public var hasPendingPrompt: Bool?
     public var encryptedClientMetadata: String?
     public var clientMetadataIv: String?
@@ -87,17 +89,20 @@ public struct EncryptedQueuedPrompt: Codable, Equatable, Sendable {
     public var timestamp: Double
     public var source: String?
     public var encryptedAttachments: [EncryptedAttachment]?
+    /// Model / effort / mode to apply right before this prompt runs (desktop request #4).
+    public var options: PromptOptions?
 
-    public init(id: String, encryptedPrompt: String, iv: String, timestamp: Double, source: String? = nil, encryptedAttachments: [EncryptedAttachment]? = nil) {
+    public init(id: String, encryptedPrompt: String, iv: String, timestamp: Double, source: String? = nil, encryptedAttachments: [EncryptedAttachment]? = nil, options: PromptOptions? = nil) {
         self.id = id
         self.encryptedPrompt = encryptedPrompt
         self.iv = iv
         self.timestamp = timestamp
         self.source = source
         self.encryptedAttachments = encryptedAttachments
+        self.options = options
     }
 
-    private enum CodingKeys: String, CodingKey { case id, encryptedPrompt, iv, timestamp, source, encryptedAttachments }
+    private enum CodingKeys: String, CodingKey { case id, encryptedPrompt, iv, timestamp, source, encryptedAttachments, options }
 
     /// Attachments are read leniently: a malformed one must not make the whole
     /// index entry (and with it the session list) undecodable.
@@ -109,7 +114,19 @@ public struct EncryptedQueuedPrompt: Codable, Equatable, Sendable {
         timestamp = try c.decode(Double.self, forKey: .timestamp)
         source = try? c.decodeIfPresent(String.self, forKey: .source)
         encryptedAttachments = try? c.decodeIfPresent([EncryptedAttachment].self, forKey: .encryptedAttachments)
+        options = try? c.decodeIfPresent(PromptOptions.self, forKey: .options)
     }
+}
+
+/// Per-prompt choices the desktop applies before running it.
+public struct PromptOptions: Codable, Equatable, Sendable {
+    public var model: String?
+    public var effortLevel: String?
+    public var mode: String?
+    public init(model: String? = nil, effortLevel: String? = nil, mode: String? = nil) {
+        self.model = model; self.effortLevel = effortLevel; self.mode = mode
+    }
+    public var isEmpty: Bool { model == nil && effortLevel == nil && mode == nil }
 }
 
 /// An image sent with a prompt. `encryptedData` is the image bytes sealed with

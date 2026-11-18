@@ -17,8 +17,10 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
     public var encryptedProjectId: String = ""
     /// Prompts waiting in this session's queue, decrypted (oldest first).
     public var queued: [QueuedPreview] = []
+    /// The session's effort as the desktop publishes it (nil = desktop default).
+    public var effortLevel: String?
 
-    public init(id: String, title: String, projectId: String, provider: String, model: String? = nil, isExecuting: Bool = false, hasPendingPrompt: Bool = false, queuedPromptCount: Int = 0, isArchived: Bool = false, hostDeviceId: String? = nil, lastActivity: Date, encryptedProjectId: String = "", queued: [QueuedPreview] = []) {
+    public init(id: String, title: String, projectId: String, provider: String, model: String? = nil, isExecuting: Bool = false, hasPendingPrompt: Bool = false, queuedPromptCount: Int = 0, isArchived: Bool = false, hostDeviceId: String? = nil, lastActivity: Date, encryptedProjectId: String = "", effortLevel: String? = nil, queued: [QueuedPreview] = []) {
         self.id = id
         self.title = title
         self.projectId = projectId
@@ -32,6 +34,7 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
         self.lastActivity = lastActivity
         self.encryptedProjectId = encryptedProjectId
         self.queued = queued
+        self.effortLevel = effortLevel
     }
 
     /// Folder name of the project ("C:\…\AXYOM - AI Development OS" -> "AXYOM - AI Development OS").
@@ -66,6 +69,7 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
             hostDeviceId: entry.hostDeviceId,
             lastActivity: Date(timeIntervalSince1970: max(entry.lastMessageAt, entry.updatedAt) / 1000),
             encryptedProjectId: entry.encryptedProjectId,
+            effortLevel: entry.effortLevel,
             queued: (entry.encryptedQueuedPrompts ?? []).compactMap { q in
                 (try? crypto.decrypt(ciphertext: q.encryptedPrompt, iv: q.iv)).map { QueuedPreview(id: q.id, text: $0) }
             }
