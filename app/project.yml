@@ -1,0 +1,53 @@
+# Xcode project definition. Generate the project with: xcodegen generate
+# The generated AxyomRemote.xcodeproj is not committed (see .gitignore).
+# Same layout as Formetra, but everything here is new: bundle id, signing
+# secrets and App Store Connect key are NOT shared with MURY or Formetra.
+name: AxyomRemote
+options:
+  bundleIdPrefix: uk.co.ferbogar
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+packages:
+  # Sync protocol, crypto, fleet model, voice parser: built and tested on Linux.
+  AxyomRemoteCore:
+    path: ../core
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  AxyomRemote:
+    type: application
+    platform: iOS
+    sources:
+      - AxyomRemote
+    dependencies:
+      - package: AxyomRemoteCore
+    settings:
+      base:
+        # PLACEHOLDER: not registered anywhere yet. HANDOFF step 4: Ricardo
+        # decides the bundle id and creates the app in App Store Connect.
+        PRODUCT_BUNDLE_IDENTIFIER: uk.co.ferbogar.axyomremote
+        PRODUCT_NAME: AxyomRemote
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: AXYOM
+        INFOPLIST_KEY_NSCameraUsageDescription: "AXYOM uses the camera to read the pairing code shown on your PC."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "AXYOM listens to your voice commands. Recognition runs on the iPhone."
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "AXYOM turns your spoken commands into text on the iPhone."
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        # The approved design is dark only.
+        INFOPLIST_KEY_UIUserInterfaceStyle: Dark
+        # ITSAppUsesNonExemptEncryption is deliberately NOT set: the app does
+        # AES-GCM/PBKDF2 itself, so the export-compliance answer is Ricardo's
+        # decision, not a default copied from Formetra.
+        CODE_SIGN_STYLE: Automatic
+        # Signing team is chosen in Xcode / CI secrets. Never commit one here.
+        DEVELOPMENT_TEAM: ""
