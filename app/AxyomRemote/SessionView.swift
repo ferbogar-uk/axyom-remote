@@ -24,15 +24,13 @@ struct SessionView: View {
     @FocusState private var typing: Bool
 
     private var session: FleetSession? { model.snapshot.sessions.first { $0.id == sessionId } }
-    private var visible: [TranscriptItem] {
-        allItems.filter { !$0.hidden && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    }
+    private var visible: [ChatLine] { ChatLines.build(allItems, provider: session?.provider ?? "") }
     private var online: Bool { model.pcStatus.isOnline }
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 14) {
                     if loading && allItems.isEmpty { ProgressView().tint(Theme.amber).frame(maxWidth: .infinity).padding(.top, 40) }
                     if let failure { Text(failure).font(.subheadline).foregroundStyle(Theme.danger).card() }
                     ForEach(visible) { item in bubble(item) }
@@ -52,7 +50,9 @@ struct SessionView: View {
                 .padding(16)
             }
             .scrollDismissesKeyboard(.interactively)
-            .onChange(of: allItems.count) { _, _ in withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
+            .onChange(of: allItems.count) { _, _ in
+                DispatchQueue.main.async { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
+            }
         }
         .safeAreaInset(edge: .bottom) { composer }
         .background(Theme.background)
@@ -140,8 +140,8 @@ struct SessionView: View {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && busyId == nil && model.snapshot.connected
     }
 
-    @ViewBuilder private func bubble(_ item: TranscriptItem) -> some View {
-        let mine = item.direction == "input"
+    @ViewBuilder private func bubble(_ item: ChatLine) -> some View {
+        let mine = item.mine
         Text(item.text)
             .font(.body).foregroundStyle(mine ? Theme.text : Theme.textSoft)
             .textSelection(.enabled)
@@ -352,7 +352,10 @@ struct SessionView: View {
             guard !added.isEmpty else { continue }
             allItems.append(contentsOf: added)
             if added.contains(where: { $0.direction == "output" }) { notice = nil }
-            if conversation { voice.speak(SpokenReply.lines(from: added)) }
+            if conversation {
+                let spoken = ChatLines.build(added, provider: session?.provider ?? "").filter { !$0.mine }.map(\.text)
+                voice.speak(spoken.map { $0.count > 600 ? String($0.prefix(600)) + "…" : $0 })
+            }
         }
     }
 }

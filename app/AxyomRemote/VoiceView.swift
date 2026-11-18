@@ -45,7 +45,7 @@ struct VoiceView: View {
             if let problem = listener.problem { Text(problem).font(.subheadline).foregroundStyle(Theme.danger) }
             if let intent { understood(intent) }
             if let failure { Text(failure).font(.subheadline).foregroundStyle(Theme.danger) }
-            Text("Nada é enviado ao PC até confirmares. O reconhecimento de voz corre no iPhone.")
+            Text(listener.onDevice ? "Nada é enviado ao PC até confirmares. O reconhecimento de voz corre no iPhone." : "Nada é enviado ao PC até confirmares. O reconhecimento de voz usa os servidores da Apple (o português não está transferido neste iPhone).")
                 .font(.footnote).foregroundStyle(Theme.muted)
             Spacer(minLength: 0)
             VStack(spacing: 10) {

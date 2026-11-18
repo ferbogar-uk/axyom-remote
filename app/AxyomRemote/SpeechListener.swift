@@ -2,16 +2,25 @@ import Foundation
 import AVFoundation
 import Speech
 
-/// Listens with Apple's on-device recognizer only. If this iPhone cannot
-/// recognize European Portuguese on the device, it says so and does NOT fall
-/// back to Apple's servers: the screen promises that recognition stays on the phone.
+/// Listens in Portuguese (Brazilian first, then European). Uses Apple's
+/// on-device recognizer when the iPhone has the language downloaded; otherwise
+/// it uses Apple's speech servers and says so on screen (`onDevice == false`).
 @MainActor
 final class SpeechListener: ObservableObject {
     @Published var transcript = ""
     @Published var listening = false
     @Published var problem: String?
+    /// Whether the last recognition ran on the iPhone (false = Apple's servers).
+    @Published var onDevice = true
 
-    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "pt-PT"))
+    private var recognizer: SFSpeechRecognizer?
+
+    /// Portuguese recognizer: on-device if any variant supports it, else the first available one.
+    private static func pickRecognizer() -> SFSpeechRecognizer? {
+        let ids = ["pt-BR", "pt-PT"]
+        let all = ids.compactMap { SFSpeechRecognizer(locale: Locale(identifier: $0)) }
+        return all.first { $0.isAvailable && $0.supportsOnDeviceRecognition } ?? all.first { $0.isAvailable } ?? all.first
+    }
     private let engine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
@@ -43,21 +52,19 @@ final class SpeechListener: ObservableObject {
     }
 
     private func begin() {
+        recognizer = Self.pickRecognizer()
         guard let recognizer, recognizer.isAvailable else {
-            problem = "O reconhecimento de voz não está disponível agora."
+            problem = "O reconhecimento de voz não está disponível agora. Confirma a ligação à internet."
             return
         }
-        guard recognizer.supportsOnDeviceRecognition else {
-            problem = "Este iPhone não reconhece português sem internet. Transfere o idioma em Definições, Geral, Teclado, Ditado."
-            return
-        }
+        onDevice = recognizer.supportsOnDeviceRecognition
         do {
             let audio = AVAudioSession.sharedInstance()
             // playAndRecord so the same session can read the agent's reply aloud afterwards.
             try audio.setCategory(.playAndRecord, mode: .default, options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
             try audio.setActive(true, options: .notifyOthersOnDeactivation)
             let request = SFSpeechAudioBufferRecognitionRequest()
-            request.requiresOnDeviceRecognition = true
+            request.requiresOnDeviceRecognition = onDevice
             request.shouldReportPartialResults = true
             self.request = request
             let input = engine.inputNode
