@@ -147,17 +147,7 @@ struct SessionView: View {
                     Button {
                         withAnimation { proxy.scrollTo("end", anchor: .bottom) }
                         unseen = 0
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.down")
-                            if unseen > 0 { Text("\(unseen) nova\(unseen == 1 ? "" : "s")") }
-                        }
-                        .font(.footnote.weight(.bold)).foregroundStyle(Theme.text)
-                        .padding(.horizontal, 14).frame(minWidth: 40, minHeight: 40)
-                        .background(Theme.barGlass.opacity(0.9), in: Capsule())
-                        .overlay(Capsule().stroke(Color.white.opacity(0.28), lineWidth: 1))
-                        .shadow(color: .black.opacity(0.35), radius: 10, y: 3)
-                    }
+                    } label: { jumpLabel }
                     .padding(.bottom, 8)
                     .accessibilityLabel(unseen > 0 ? "Ir para o fim, \(unseen) mensagens novas" : "Ir para o fim")
                 }
@@ -388,6 +378,22 @@ struct SessionView: View {
             .animation(.easeInOut(duration: 0.25), value: phase)
         }
         .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
+    }
+
+    /// "↓ 3 novas": clearly visible over the conversation.
+    private var jumpLabel: some View {
+        let shape = Capsule()
+        return HStack(spacing: 6) {
+            Image(systemName: "arrow.down")
+            if unseen > 0 { Text(unseen == 1 ? "1 nova" : "\(unseen) novas") }
+        }
+        .font(.footnote.weight(.bold))
+        .foregroundStyle(Theme.text)
+        .padding(.horizontal, 14)
+        .frame(minWidth: 40, minHeight: 40)
+        .background(shape.fill(Theme.barGlass.opacity(0.9)))
+        .overlay(shape.stroke(Color.white.opacity(0.28), lineWidth: 1))
+        .shadow(color: Color.black.opacity(0.35), radius: 10, y: 3)
     }
 
     /// Light tap when the app starts listening and when the agent's reply arrives.
