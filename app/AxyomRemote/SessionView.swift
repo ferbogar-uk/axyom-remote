@@ -364,7 +364,7 @@ struct SessionView: View {
         }
         .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
         // Dark strip only under the bar (its lower edge to the screen bottom).
-        .background(alignment: .bottom) { FrostedBackdrop().frame(height: 14) }
+        .background(alignment: .bottom) { FrostedBackdrop() }
     }
 
     private var hasContent: Bool {

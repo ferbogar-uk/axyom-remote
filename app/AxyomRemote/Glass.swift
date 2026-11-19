@@ -8,21 +8,21 @@ import SwiftUI
 /// Reduce Transparency.
 struct FrostedBackdrop: View {
     @Environment(\.accessibilityReduceTransparency) private var reduce
+    /// Height above the bottom of the bar's container (its lower padding plus a little of the bar).
+    var height: CGFloat = 14
+    /// How far it reaches below the container, through the home-indicator area to the screen edge.
+    private let below: CGFloat = 60
 
     var body: some View {
-        ZStack {
-            if reduce {
-                Theme.background
-            } else {
-                // No system material: it always lifts the colour towards grey.
-                // Background colour, only a faint shadow of what scrolls past.
-                Theme.background.opacity(0.9)
-            }
-        }
-        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.45), .init(color: .black, location: 1)],
-                             startPoint: .top, endPoint: .bottom))
-        .ignoresSafeArea(edges: .bottom)
-        .allowsHitTesting(false)
+        (reduce ? Theme.background : Theme.background.opacity(0.92))
+            .mask(LinearGradient(stops: [.init(color: .clear, location: 0),
+                                         .init(color: .black, location: min(1, 10 / (height + below))),
+                                         .init(color: .black, location: 1)],
+                                 startPoint: .top, endPoint: .bottom))
+            .frame(height: height + below)
+            .offset(y: below)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
