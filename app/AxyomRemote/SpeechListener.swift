@@ -46,6 +46,10 @@ final class SpeechListener: ObservableObject {
     private var autoStop = false
     private var collector: PCMCollector?
     private var sttTask: Task<Void, Never>?
+    /// Bumped on every new recognition task and on stop: a late result from an
+    /// old task (iOS sends one more "final" after we stop) is ignored. It used
+    /// to be added again, so what you said appeared twice.
+    private var generation = 0
     /// Seconds of silence after speech that end listening when auto-stop is on.
     /// 1.8 s: pauses no longer erase what was said (TranscriptJoiner keeps it),
     /// so the wait can be shorter than AVA's 2.5 s; tapping still sends at once.
@@ -120,9 +124,11 @@ final class SpeechListener: ObservableObject {
         request.shouldReportPartialResults = true
         if #available(iOS 16, *) { request.addsPunctuation = true }
         self.request = request
+        generation += 1
+        let mine = generation
         task = recognizer.recognitionTask(with: request) { [weak self] result, error in
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard let self, self.generation == mine, self.listening, !self.transcribing else { return }
                 if let text = result?.bestTranscription.formattedString {
                     self.transcript = self.joiner.update(text)
                     self.armSilenceTimer()
@@ -168,6 +174,7 @@ final class SpeechListener: ObservableObject {
             return
         }
         guard !transcribing, listening || engine.isRunning else { return }
+        generation += 1          // ignore anything the old task still sends
         joiner.commit()
         transcript = joiner.text
         engine.stop()
