@@ -353,6 +353,8 @@ struct SessionView: View {
             }
             .padding(14)
             .glassBar(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            // Dark surround: bar top to screen bottom, a little inside the bar.
+            .background { FrostedBackdrop(cornerRadius: 26) }
             .overlay {
                 if conversation && phase == .listening {
                     VoiceGlow(color: Theme.voiceBlue, level: listener.level)
@@ -363,8 +365,7 @@ struct SessionView: View {
             .animation(.easeInOut(duration: 0.25), value: phase)
         }
         .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
-        // Dark strip only under the bar (its lower edge to the screen bottom).
-        .background(alignment: .bottom) { FrostedBackdrop() }
+
     }
 
     private var hasContent: Bool {

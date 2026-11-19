@@ -301,8 +301,9 @@ struct ComandoView: View {
         }
         .padding(10)
         .glassBar(Capsule())
+            // Dark surround: bar top to screen bottom, a little inside the bar.
+            .background { FrostedBackdrop() }
         .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
-        // Dark strip only under the bar (its lower edge to the screen bottom).
-        .background(alignment: .bottom) { FrostedBackdrop() }
+
     }
 }
