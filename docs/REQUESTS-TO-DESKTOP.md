@@ -339,3 +339,30 @@ Status: done on the server and the desktop (19 Nov 2026).
 - Claude Code now streams partial text (`includePartialMessages`) used only for
   these frames; Codex and the other agents use their existing text deltas.
 - Not yet seen end to end on the iPhone: please confirm on build 35.
+
+## 12. Tell the agent which session it is in and that Ricardo is on the phone
+
+Ricardo (19 Nov 2026): asked "do you know which session you are in?" from
+the iPhone, the agent answered that it does not know the session's name, its
+place on the session board, or that he is talking from the phone by voice.
+The phone only sends his text, so the agent has no way to know.
+
+Proposal for AXYOM (desktop): when a queued prompt comes from the phone
+(`source: "mobile"`), add a short context block for the agent, not shown in
+the transcript as Ricardo's words:
+
+    [AXYOM] Session: "01 Aion | AXYOM Development" (id …), project
+    "AXYOM - AI Development OS", worktree "<name>" on branch "<branch>"
+    (only when it runs in a worktree). Ricardo is on the iPhone app (AXYOM
+    Remote), talking by voice: the reply is read aloud, so answer in short
+    spoken Portuguese, no tables or code unless he asks.
+
+- "talking by voice" only when the prompt's options say it came from the
+  voice conversation (the phone can add `options.voice = true`; tell me the
+  field name you prefer and the phone will send it).
+- Same block for every provider (Claude, Codex, Gemini, Grok, Cursor,
+  OpenCode), in the form each one accepts (system prompt append or a hidden
+  preamble).
+- Keep it to these facts; no extra instructions.
+
+Status: waiting for the desktop session.
