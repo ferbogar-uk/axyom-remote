@@ -52,6 +52,8 @@ public actor RemoteClient {
         public var pushReady: Bool?
         /// Plan usage per desktop (latest broadcast each), newest first.
         public var planUsage: [PlanUsage] = []
+        /// Replies being written right now, per session (cleared when complete).
+        public var liveText: [String: String] = [:]
         public init() {}
     }
 
@@ -82,6 +84,15 @@ public actor RemoteClient {
     private var snapshot = Snapshot()
     private var onChange: (@Sendable (Snapshot) -> Void)?
     private var cache: OfflineCache?
+    private var streamSeq: [String: Int] = [:]
+
+    /// The live text of a reply is no longer needed once its row arrived.
+    public func clearLiveText(sessionId: String) {
+        guard snapshot.liveText[sessionId] != nil else { return }
+        snapshot.liveText[sessionId] = nil
+        streamSeq[sessionId] = nil
+        publish()
+    }
     private var pushToken: (token: String, development: Bool)?
 
     /// Give the server this phone's APNs token. Sent now if connected, and
@@ -251,6 +262,13 @@ public actor RemoteClient {
         case .planUsageBroadcast(let deviceId, let encrypted, let iv, _):
             guard let u = PlanUsage.decrypt(deviceId: deviceId, encryptedUsage: encrypted, usageIv: iv, crypto: crypto) else { return }
             usage[deviceId] = u
+        case .sessionStream(let sessionId, let encrypted, let iv, let seq, let done):
+            // Out-of-order frames: keep only the newest per session.
+            if let last = streamSeq[sessionId], seq < last, seq != 0 { return }
+            streamSeq[sessionId] = seq
+            if done { snapshot.liveText[sessionId] = nil; streamSeq[sessionId] = nil }
+            else if let text = try? crypto.decrypt(ciphertext: encrypted, iv: iv) { snapshot.liveText[sessionId] = text }
+            else { return }
         case .error(let code, let message, _):
             snapshot.lastError = code.lowercased().contains("auth") ? "O servidor recusou este iPhone. Emparelha de novo." : "O servidor devolveu um erro"
             _ = message
