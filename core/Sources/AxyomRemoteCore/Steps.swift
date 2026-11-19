@@ -7,7 +7,8 @@ public enum Steps {
     public struct Step: Equatable, Sendable {
         public let text: String
         public let detail: String?
-        public init(_ text: String, detail: String? = nil) { self.text = text; self.detail = detail }
+        public let diff: FileDiff?
+        public init(_ text: String, detail: String? = nil, diff: FileDiff? = nil) { self.text = text; self.detail = detail; self.diff = diff }
     }
 
     public static func describe(_ v: JSONValue) -> [String] { detailed(v).map(\.text) }
@@ -31,8 +32,14 @@ public enum Steps {
         if kind.contains("filechange") || kind.contains("file_change") {
             var paths: [String] = []
             if case .array(let changes)? = item["changes"] { paths = changes.compactMap { $0["path"]?.string } }
-            return Step(paths.isEmpty ? "Editou ficheiros" : "Editou " + paths.map(file).joined(separator: ", "),
-                        detail: paths.isEmpty ? nil : paths.joined(separator: "\n"))
+            var diff: FileDiff?
+            if case .array(let changes)? = item["changes"], changes.count == 1,
+               let p = changes[0]["path"]?.string, let d = changes[0]["diff"]?.string ?? changes[0]["unified_diff"]?.string {
+                diff = FileDiff.unified(path: p, d)
+            }
+            let base = paths.isEmpty ? "Editou ficheiros" : "Editou " + paths.map(file).joined(separator: ", ")
+            return Step(diff.map { $0.counts.isEmpty ? base : base + " · " + $0.counts } ?? base,
+                        detail: paths.isEmpty ? nil : paths.joined(separator: "\n"), diff: diff)
         }
         if kind.contains("web_search") || kind.contains("websearch") {
             return Step("Pesquisou na web: " + short(item["query"]?.string ?? ""))
@@ -74,7 +81,30 @@ public enum Steps {
         if n.contains("list_directory") || n.contains("list_dir") || n == "ls" {
             return Step("Viu a pasta " + (path.map(file) ?? ""), detail: path)
         }
+        if let diff = editDiff(n, input, path) {
+            let verb = diff.removed == 0 && (n.contains("write") || n.contains("create")) ? "Criou " : "Editou "
+            let text = verb + file(diff.path) + (diff.counts.isEmpty ? "" : " · " + diff.counts)
+            return Step(text, detail: path, diff: diff)
+        }
         return Step(toolText(n, name, input, path), detail: path)
+    }
+
+    /// Claude Edit (old_string/new_string), MultiEdit (edits[]), Write (content),
+    /// Desktop Commander edit_block (old_string/new_string) and write_file (content).
+    static func editDiff(_ n: String, _ input: JSONValue?, _ path: String?) -> FileDiff? {
+        guard let input, let path, n.contains("edit") || n.contains("write") || n.contains("create") else { return nil }
+        if let old = input["old_string"]?.string, let new = input["new_string"]?.string {
+            return FileDiff.edit(path: path, old: old, new: new)
+        }
+        if case .array(let edits)? = input["edits"] {
+            let parts = edits.compactMap { e -> FileDiff? in
+                guard let old = e["old_string"]?.string, let new = e["new_string"]?.string else { return nil }
+                return FileDiff.edit(path: path, old: old, new: new)
+            }
+            return parts.isEmpty ? nil : FileDiff.merge(path: path, parts)
+        }
+        if let content = input["content"]?.string { return FileDiff.created(path: path, content: content) }
+        return nil
     }
 
     private static func toolText(_ n: String, _ name: String, _ input: JSONValue?, _ path: String?) -> String {
