@@ -301,9 +301,6 @@ struct SessionView: View {
             if let problem = listener.problem { Text(problem).font(.caption).foregroundStyle(Theme.danger).padding(.horizontal, 8) }
             if !online { Text("O PC está offline: a resposta fica guardada e corre quando ele ligar.").font(.caption).foregroundStyle(Theme.muted).padding(.horizontal, 8) }
             queueTray
-            if conversation && phase == .waiting {
-                ThinkingDots().padding(.horizontal, 12).padding(.bottom, 2)
-            }
             VStack(alignment: .leading, spacing: 10) {
                 AttachmentTray(images: $images)
                 if listener.listening && !conversation {
