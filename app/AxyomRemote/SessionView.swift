@@ -519,7 +519,8 @@ struct SessionView: View {
     /// What to send with the next message: only what you changed.
     private var promptOptions: PromptOptions {
         PromptOptions(model: pendingModel.flatMap { $0 == session?.model ? nil : $0 },
-                      effortLevel: pendingEffort.flatMap { $0 == session?.effortLevel ? nil : $0 })
+                      effortLevel: pendingEffort.flatMap { $0 == session?.effortLevel ? nil : $0 },
+                      voice: conversation ? true : nil)
     }
 
     /// Model and effort picker, filled from the list the PC publishes. The choice

@@ -123,10 +123,13 @@ public struct PromptOptions: Codable, Equatable, Sendable {
     public var model: String?
     public var effortLevel: String?
     public var mode: String?
-    public init(model: String? = nil, effortLevel: String? = nil, mode: String? = nil) {
-        self.model = model; self.effortLevel = effortLevel; self.mode = mode
+    /// Sent from the voice conversation (request #12): the desktop tells the
+    /// agent its reply will be read aloud. Absent = typed.
+    public var voice: Bool?
+    public init(model: String? = nil, effortLevel: String? = nil, mode: String? = nil, voice: Bool? = nil) {
+        self.model = model; self.effortLevel = effortLevel; self.mode = mode; self.voice = voice
     }
-    public var isEmpty: Bool { model == nil && effortLevel == nil && mode == nil }
+    public var isEmpty: Bool { model == nil && effortLevel == nil && mode == nil && voice == nil }
 }
 
 /// An image sent with a prompt. `encryptedData` is the image bytes sealed with
