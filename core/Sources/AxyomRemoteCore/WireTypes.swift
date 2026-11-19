@@ -126,10 +126,13 @@ public struct PromptOptions: Codable, Equatable, Sendable {
     public var model: String?
     public var effortLevel: String?
     public var mode: String?
-    public init(model: String? = nil, effortLevel: String? = nil, mode: String? = nil) {
-        self.model = model; self.effortLevel = effortLevel; self.mode = mode
+    /// Sent from the voice conversation (request #12): the desktop tells the
+    /// agent its reply will be read aloud. Absent = typed.
+    public var voice: Bool?
+    public init(model: String? = nil, effortLevel: String? = nil, mode: String? = nil, voice: Bool? = nil) {
+        self.model = model; self.effortLevel = effortLevel; self.mode = mode; self.voice = voice
     }
-    public var isEmpty: Bool { model == nil && effortLevel == nil && mode == nil }
+    public var isEmpty: Bool { model == nil && effortLevel == nil && mode == nil && voice == nil }
 }
 
 /// An image sent with a prompt. `encryptedData` is the image bytes sealed with
@@ -202,6 +205,9 @@ public enum ServerMessage: Equatable, Sendable {
     case registerPushTokenResult(deviceId: String, ok: Bool, pushConfigured: Bool)
     /// A desktop's plan usage (Claude, Codex, ...), encrypted like message content.
     case planUsageBroadcast(deviceId: String, encryptedUsage: String, usageIv: String, updatedAt: Double?)
+    /// The agent's reply as it is being written (relay-only, request #11): the
+    /// whole text so far, encrypted; `done` when that message is complete.
+    case sessionStream(sessionId: String, encryptedText: String, iv: String, seq: Int, done: Bool)
     case pong
     /// A message type this build does not handle yet (kept so it is visible, not dropped silently).
     case unhandled(type: String)
@@ -253,6 +259,10 @@ public enum ServerMessage: Equatable, Sendable {
         case "planUsageBroadcast":
             let u = try d.decode(Usage.self, from: data)
             return .planUsageBroadcast(deviceId: u.deviceId, encryptedUsage: u.encryptedUsage, usageIv: u.usageIv, updatedAt: u.updatedAt)
+        case "sessionStreamBroadcast":
+            struct S: Decodable { struct B: Decodable { let sessionId: String; let encryptedText: String; let iv: String; let seq: Int?; let done: Bool? }; let stream: B }
+            let s = try d.decode(S.self, from: data).stream
+            return .sessionStream(sessionId: s.sessionId, encryptedText: s.encryptedText, iv: s.iv, seq: s.seq ?? 0, done: s.done ?? false)
         case "pong": return .pong
         default: return .unhandled(type: type)
         }

@@ -282,3 +282,103 @@ decrypts extra fields when present. It only runs if the push asks for it.
 Status: waiting for the desktop/server session. Until then the phone shows
 the better text only in its own local notifications (app open or just in
 the background).
+
+## 11. Live reply text for the phone (`sessionStreamText`)
+
+Ricardo (19 Nov 2026): in a voice conversation the phone waits for the whole
+reply before it shows or reads anything. It should appear as the agent
+writes, and the phone should start reading the first sentence right away.
+
+Checked in axyom-v01: the desktop syncs persisted transcript rows only
+(`appendMessage`), so the phone first sees the reply when the assistant
+message is complete. Streaming deltas never leave the PC.
+
+The phone is ready (branch live-reply, build 35): it shows the live text in
+the conversation, reads each sentence as soon as it is complete, does not
+read again what it already read when the final row arrives, and only opens
+the microphone once the agent has finished.
+
+**Server (axyom-backend, one line):** add to `RELAYS` in sync/src/index.ts
+
+    sessionStreamText: { out: 'sessionStreamBroadcast', field: 'stream' },
+
+so the frame is forwarded to the user's other devices in the index room and
+never stored. Document it in PROTOCOL.md next to `sessionContextUpdate`.
+
+**Desktop (AXYOM):** while an agent streams the text of an assistant
+message (Claude Code `stream_event` text deltas, Codex `agent_message`
+deltas, the others where they exist), send on the index socket:
+
+    { "type": "sessionStreamText",
+      "stream": { "sessionId": "...",
+                  "encryptedText": "<whole text of this message so far>",
+                  "iv": "...",
+                  "seq": 17,
+                  "done": false } }
+
+- Encrypt with the same key and helper used for index fields
+  (`encryptData`, AES-256-GCM); send the **whole text so far**, not the delta,
+  so a lost frame costs nothing.
+- At most one frame every 250 ms per session, plus one right away when a
+  sentence ends (`.`, `!`, `?`, new line) so speech starts sooner.
+- `seq` increases per session; `done: true` (empty text allowed) when the
+  message completes, when a tool call starts, or when the turn is cancelled.
+- Only while some phone is connected to the index room (skip otherwise).
+- Text only: no thinking, no tool input/output.
+
+Status: done on the server and the desktop (19 Nov 2026).
+- Server: `sessionStreamText` is in `RELAYS` (relayed as `sessionStreamBroadcast`,
+  never stored), documented in sync/PROTOCOL.md; deployed (axyom-backend 5f788d3,
+  version 1839410e). Smoke test checks the relay and that the sender gets no echo.
+- Desktop (AXYOM, branch axyom-redesign-backup, build release20): while an agent
+  writes, the whole text of the current assistant message goes out encrypted with
+  the index key, at most every 250 ms and at once when a sentence ends (`.` `!` `?`
+  `…` or new line), with a per-session rising `seq`; `done: true` when the message
+  completes, a tool call starts, or the turn errors or is cancelled. Sent only while
+  a phone or tablet is in the index room. Text only.
+- Claude Code now streams partial text (`includePartialMessages`) used only for
+  these frames; Codex and the other agents use their existing text deltas.
+- Not yet seen end to end on the iPhone: please confirm on build 35.
+
+## 12. Tell the agent which session it is in and that Ricardo is on the phone
+
+Ricardo (19 Nov 2026): asked "do you know which session you are in?" from
+the iPhone, the agent answered that it does not know the session's name, its
+place on the session board, or that he is talking from the phone by voice.
+The phone only sends his text, so the agent has no way to know.
+
+Proposal for AXYOM (desktop): when a queued prompt comes from the phone
+(`source: "mobile"`), add a short context block for the agent, not shown in
+the transcript as Ricardo's words:
+
+    [AXYOM] Session: "01 Aion | AXYOM Development" (id …), project
+    "AXYOM - AI Development OS", worktree "<name>" on branch "<branch>"
+    (only when it runs in a worktree). Ricardo is on the iPhone app (AXYOM
+    Remote), talking by voice: the reply is read aloud, so answer in short
+    spoken Portuguese, no tables or code unless he asks.
+
+- "talking by voice" only when the prompt's options say it came from the
+  voice conversation (the phone can add `options.voice = true`; tell me the
+  field name you prefer and the phone will send it).
+- Same block for every provider (Claude, Codex, Gemini, Grok, Cursor,
+  OpenCode), in the form each one accepts (system prompt append or a hidden
+  preamble).
+- Keep it to these facts; no extra instructions.
+
+Status: done on the desktop (19 Nov 2026), AXYOM build release21.
+- Field for "came from the voice conversation": `options.voice = true` (a real
+  boolean, on the queued prompt next to mode/model/effortLevel). Anything else
+  counts as typed.
+- A queued prompt with `promptProvenance.origin = "mobile"` gets one line for the
+  agent, in the hidden system-message block that every provider already uses
+  (buildUserMessageAddition), so the transcript never shows it as your words:
+
+      [AXYOM] Session: "<title>" (id <id>), project "<folder>", worktree "<name>"
+      on branch "<branch>". Ricardo is on the iPhone app (AXYOM Remote), talking
+      by voice: the reply is read aloud, so answer in short spoken Portuguese, no
+      tables or code unless he asks.
+
+  Worktree/branch only when the session runs in one; without `options.voice` the
+  end reads "typing on the phone". Same block for Claude, Codex, Gemini, Grok,
+  Cursor and OpenCode.
+- Phone: please send `options.voice: true` for prompts from the voice conversation.

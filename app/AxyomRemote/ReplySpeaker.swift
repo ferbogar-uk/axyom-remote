@@ -30,6 +30,11 @@ final class ReplySpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         return AVSpeechSynthesisVoice(language: first) ?? AVSpeechSynthesisVoice(language: second)
     }
 
+    /// Pieces waiting to be read with the neural voice.
+    private var queue: [String] = []
+
+    /// Read these lines; if something is already being read, they follow it
+    /// (so a reply can be read sentence by sentence while it is still written).
     func speak(_ lines: [String]) {
         let clean = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
         guard !clean.isEmpty else { return }
@@ -37,26 +42,35 @@ final class ReplySpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
         try? audio.setCategory(.playAndRecord, mode: .default, options: [.duckOthers, .defaultToSpeaker, .allowBluetooth])
         try? audio.setActive(true)
         speaking = true
-        if Prefs.voiceEngine == "azure", let neural = Self.neural {
-            let pieces = NeuralVoice.chunks(clean.joined(separator: "\n"))
-            job = Task { [weak self] in await self?.playNeural(pieces, fetch: neural) }
+        if Prefs.voiceEngine == "azure", let neural = Self.neural, pending == 0 {
+            queue += NeuralVoice.chunks(clean.joined(separator: "\n"))
+            if job == nil { job = Task { [weak self] in await self?.playQueue(fetch: neural) } }
         } else {
             speakSystem(clean)
         }
     }
 
-    /// Fetch the next piece while the current one plays, so there is no gap.
-    private func playNeural(_ pieces: [String], fetch: @escaping (String) async -> Data?) async {
-        var next: Task<Data?, Never>? = pieces.isEmpty ? nil : Task { await fetch(pieces[0]) }
-        for i in pieces.indices {
-            guard !Task.isCancelled, let current = next else { return }
-            let data = await current.value
-            next = i + 1 < pieces.count ? Task { await fetch(pieces[i + 1]) } : nil
-            guard !Task.isCancelled else { next?.cancel(); return }
+    /// Play the queue in order, fetching the next piece while one plays.
+    private func playQueue(fetch: @escaping (String) async -> Data?) async {
+        var next: (text: String, task: Task<Data?, Never>)?
+        func prefetch() {
+            guard next == nil, !queue.isEmpty else { return }
+            let text = queue.removeFirst()
+            next = (text, Task { await fetch(text) })
+        }
+        prefetch()
+        while let current = next, !Task.isCancelled {
+            next = nil
+            let data = await current.task.value
+            prefetch()
+            guard !Task.isCancelled else { next?.task.cancel(); return }
             guard let data, let p = try? AVAudioPlayer(data: data) else {
-                next?.cancel()
+                // Fall back to the iPhone voice for this piece and everything after it.
+                next?.task.cancel()
+                let rest = [current.text] + (next.map { [$0.text] } ?? []) + queue
+                queue = []
                 job = nil
-                speakSystem(Array(pieces[i...]))     // fall back for what is left
+                speakSystem(rest)
                 return
             }
             p.delegate = self
@@ -66,6 +80,7 @@ final class ReplySpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
                 if !p.play() { playerDone = nil; c.resume() }
             }
             player = nil
+            prefetch()
         }
         guard !Task.isCancelled else { return }
         job = nil
@@ -86,6 +101,7 @@ final class ReplySpeaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegat
     func stop() {
         job?.cancel()
         job = nil
+        queue = []
         player?.stop()
         player = nil
         resumePlayer()
