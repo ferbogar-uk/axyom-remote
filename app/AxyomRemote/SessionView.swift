@@ -319,16 +319,22 @@ struct SessionView: View {
                 if listener.listening && !conversation {
                     Text(listener.transcribing ? "A transcrever…" : listener.transcript.isEmpty ? "A ouvir…" : "“\(listener.transcript)”")
                         .font(.body).foregroundStyle(Theme.textSoft).lineLimit(4)
-                } else if conversation, !listener.transcript.isEmpty, phase == .listening {
-                    // Conversation: what you are saying, faint; no "a ouvir" label (the blue glow says it).
-                    Text(listener.transcript).font(.body).foregroundStyle(Theme.muted).lineLimit(3)
                 }
-                TextField("Responder ao agente…", text: $draft, axis: .vertical)
-                    .lineLimit(1...6)
-                    .focused($typing)
-                    .font(.body)
-                    .foregroundStyle(Theme.text)
-                    .padding(.horizontal, 4)
+                if conversation {
+                    // Conversation: what you say, in italics, in place of the text field (like Claude's voice mode).
+                    Text(phase == .listening && !listener.transcript.isEmpty ? listener.transcript : " ")
+                        .font(.body.italic()).foregroundStyle(Theme.textSoft).lineLimit(3)
+                        .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
+                        .padding(.horizontal, 4)
+                        .accessibilityLabel(listener.transcript.isEmpty ? "Conversa por voz" : listener.transcript)
+                } else {
+                    TextField("Responder ao agente…", text: $draft, axis: .vertical)
+                        .lineLimit(1...6)
+                        .focused($typing)
+                        .font(.body)
+                        .foregroundStyle(Theme.text)
+                        .padding(.horizontal, 4)
+                }
                 HStack(spacing: 10) {
                     Menu {
                         Button { showPhotos = true } label: { Label("Escolher fotografias", systemImage: "photo.on.rectangle") }
@@ -356,7 +362,7 @@ struct SessionView: View {
             .padding(14)
             .glassBar(RoundedRectangle(cornerRadius: 26, style: .continuous))
             // Dark surround: bar top to screen bottom, a little inside the bar.
-            .background { FrostedBackdrop(cornerRadius: 26, active: contentUnderBar) }
+            .background { FrostedBackdrop(cornerRadius: 26, active: contentUnderBar && !voiceGlowing) }
             .overlay {
                 if conversation && phase == .listening {
                     VoiceGlow(color: Theme.voiceBlue, level: listener.level)

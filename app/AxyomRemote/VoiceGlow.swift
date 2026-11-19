@@ -42,3 +42,27 @@ struct ThinkingDots: View {
         .accessibilityLabel("O agente está a pensar")
     }
 }
+
+/// Soft glow rising from the bottom edge of the screen, like Claude's voice
+/// mode: a wash of colour plus brighter bottom corners. Follows the mic level
+/// when given, else breathes slowly.
+struct ScreenGlow: View {
+    let color: Color
+    let level: CGFloat?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            let l = reduceMotion ? 0.5 : (level ?? CGFloat(0.5 + 0.5 * sin(t * 2.2)))
+            ZStack {
+                LinearGradient(colors: [color.opacity(0.16 + 0.22 * l), color.opacity(0.05), .clear],
+                               startPoint: .bottom, endPoint: .top)
+                RadialGradient(colors: [color.opacity(0.18 + 0.3 * l), .clear], center: .bottomLeading, startRadius: 0, endRadius: 240)
+                RadialGradient(colors: [color.opacity(0.18 + 0.3 * l), .clear], center: .bottomTrailing, startRadius: 0, endRadius: 240)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}

@@ -91,7 +91,7 @@ private struct GlassBar<S: InsettableShape>: ViewModifier {
                     shape.fill(Theme.surface)
                 } else {
                     ZStack {
-                        shape.fill(.ultraThinMaterial).opacity(0.75)
+                        shape.fill(.ultraThinMaterial)
                         shape.fill(Theme.barGlass.opacity(0.14))
                     }
                 }
