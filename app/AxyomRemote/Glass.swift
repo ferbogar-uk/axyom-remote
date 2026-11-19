@@ -13,8 +13,9 @@ struct FrostedBackdrop: View {
             if reduce {
                 Theme.background
             } else {
-                Rectangle().fill(.ultraThinMaterial)
-                Theme.background.opacity(0.62)
+                // No system material: it always lifts the colour towards grey.
+                // Plain background colour, slightly see-through.
+                Theme.background.opacity(0.86)
             }
         }
         .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.28), .init(color: .black, location: 1)],
