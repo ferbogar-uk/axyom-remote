@@ -122,6 +122,8 @@ final class AppModel: ObservableObject {
         cache.clear()
         ReplySpeaker.neural = nil
         SpeechListener.azureSTT = nil
+        SharedKeychain.clear()
+        lastPushContext = nil
         voiceStatus = nil
         pairing = nil
         snapshot = RemoteClient.Snapshot()
@@ -129,16 +131,34 @@ final class AppModel: ObservableObject {
 
     private func apply(_ snap: RemoteClient.Snapshot) {
         snapshot = snap
+        sharePushContext(snap.sessions)
         for s in attention.update(snap.sessions) { notifyWaiting(s) }
         for s in finishes.update(snap.sessions) { notifyFinished(s) }
     }
 
     /// Local notification when an agent finishes its turn (same limits as the waiting one).
+    /// Session titles for the notification extension, rewritten only when they change.
+    private var lastPushContext: PushContent.Context?
+    private func sharePushContext(_ sessions: [FleetSession]) {
+        let ctx = PushContent.context(from: sessions, seed: pairing?.seed, member: pairing?.member)
+        guard ctx != lastPushContext else { return }
+        lastPushContext = ctx
+        SharedKeychain.save(ctx)
+    }
+
+    private func localContent(_ s: FleetSession, kind: String) -> UNMutableNotificationContent {
+        let text = PushContent.compose(kind: kind, entry: .init(title: s.title, provider: s.provider, project: s.projectName))
+        let content = UNMutableNotificationContent()
+        content.title = text.title
+        content.subtitle = text.subtitle
+        content.body = text.body
+        content.threadIdentifier = s.id
+        return content
+    }
+
     private func notifyFinished(_ s: FleetSession) {
         guard Prefs.notifyFinished, UIApplication.shared.applicationState != .active else { return }
-        let content = UNMutableNotificationContent()
-        content.title = "\(ProviderName.display(s.provider)) terminou"
-        content.body = "\(s.title) · \(s.projectName)"
+        let content = localContent(s, kind: "finished")
         content.sound = .default
         content.userInfo = ["sessionId": s.id]
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "done-\(s.id)-\(Int(Date().timeIntervalSince1970))", content: content, trigger: nil))
@@ -149,9 +169,7 @@ final class AppModel: ObservableObject {
     /// suspends the connection soon after. With the app closed the server sends an APNs push instead.
     private func notifyWaiting(_ s: FleetSession) {
         guard Prefs.notifications, UIApplication.shared.applicationState != .active else { return }
-        let content = UNMutableNotificationContent()
-        content.title = "À espera de ti"
-        content.body = "\(s.title) · \(s.projectName)"
+        let content = localContent(s, kind: "waiting")
         content.sound = .default
         content.userInfo = ["sessionId": s.id]
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "wait-\(s.id)", content: content, trigger: nil))
