@@ -326,4 +326,16 @@ deltas, the others where they exist), send on the index socket:
 - Only while some phone is connected to the index room (skip otherwise).
 - Text only: no thinking, no tool input/output.
 
-Status: waiting for the desktop/server session.
+Status: done on the server and the desktop (19 Nov 2026).
+- Server: `sessionStreamText` is in `RELAYS` (relayed as `sessionStreamBroadcast`,
+  never stored), documented in sync/PROTOCOL.md; deployed (axyom-backend 5f788d3,
+  version 1839410e). Smoke test checks the relay and that the sender gets no echo.
+- Desktop (AXYOM, branch axyom-redesign-backup, build release20): while an agent
+  writes, the whole text of the current assistant message goes out encrypted with
+  the index key, at most every 250 ms and at once when a sentence ends (`.` `!` `?`
+  `…` or new line), with a per-session rising `seq`; `done: true` when the message
+  completes, a tool call starts, or the turn errors or is cancelled. Sent only while
+  a phone or tablet is in the index room. Text only.
+- Claude Code now streams partial text (`includePartialMessages`) used only for
+  these frames; Codex and the other agents use their existing text deltas.
+- Not yet seen end to end on the iPhone: please confirm on build 35.
