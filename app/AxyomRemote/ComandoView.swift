@@ -284,7 +284,7 @@ struct ComandoView: View {
                 }
                 .font(.headline).foregroundStyle(pcOnline ? Theme.text : Theme.muted)
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .background(Theme.text.opacity(0.08), in: Capsule())
+                .contentShape(Capsule())
             }
             .disabled(!pcOnline)
             Button { talk() } label: {

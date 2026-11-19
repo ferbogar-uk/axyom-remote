@@ -15,7 +15,7 @@ struct FrostedBackdrop: View {
             } else {
                 // No system material: it always lifts the colour towards grey.
                 // Plain background colour, slightly see-through.
-                Theme.background.opacity(0.86)
+                Theme.background.opacity(0.72)
             }
         }
         .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.28), .init(color: .black, location: 1)],
@@ -26,13 +26,14 @@ struct FrostedBackdrop: View {
 }
 
 extension View {
-    /// The floating bar itself: grey frosted glass, mostly opaque.
-    func glassBar<S: Shape>(_ shape: S) -> some View {
+    /// The floating bar itself: one see-through frosted glass like Claude's
+    /// composer (content blurred behind it), a light rim on top.
+    func glassBar<S: InsettableShape>(_ shape: S) -> some View {
         modifier(GlassBar(shape: shape))
     }
 }
 
-private struct GlassBar<S: Shape>: ViewModifier {
+private struct GlassBar<S: InsettableShape>: ViewModifier {
     let shape: S
     @Environment(\.accessibilityReduceTransparency) private var reduce
 
@@ -43,12 +44,13 @@ private struct GlassBar<S: Shape>: ViewModifier {
                     shape.fill(Theme.surface)
                 } else {
                     ZStack {
-                        shape.fill(.regularMaterial)
-                        shape.fill(Theme.barGlass.opacity(0.72))
+                        shape.fill(.ultraThinMaterial)
+                        shape.fill(Theme.barGlass.opacity(0.38))
                     }
                 }
             }
-            .overlay(shape.stroke(Color.white.opacity(0.08), lineWidth: 1))
-            .shadow(color: .black.opacity(0.25), radius: 16, y: 6)
+            .overlay(shape.strokeBorder(LinearGradient(colors: [Color.white.opacity(0.22), Color.white.opacity(0.05)],
+                                                       startPoint: .top, endPoint: .bottom), lineWidth: 1))
+            .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
     }
 }
