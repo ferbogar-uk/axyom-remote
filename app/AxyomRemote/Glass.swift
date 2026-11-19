@@ -46,11 +46,11 @@ private struct GlassBar<S: InsettableShape>: ViewModifier {
                 } else {
                     ZStack {
                         shape.fill(.ultraThinMaterial)
-                        shape.fill(Theme.barGlass.opacity(0.2))
+                        shape.fill(Theme.barGlass.opacity(0.28))
                     }
                 }
             }
-            .overlay(shape.strokeBorder(LinearGradient(colors: [Color.white.opacity(0.22), Color.white.opacity(0.05)],
+            .overlay(shape.strokeBorder(LinearGradient(colors: [Color.white.opacity(0.28), Color.white.opacity(0.06)],
                                                        startPoint: .top, endPoint: .bottom), lineWidth: 1))
             .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
     }

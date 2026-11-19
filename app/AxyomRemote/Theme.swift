@@ -25,7 +25,7 @@ enum Theme {
 
     /// Frosted glass tints: graphite band behind the floating bars, grey for the bars.
     static let graphiteGlass = Color(light: 0xE6E9ED, dark: 0x16171A)
-    static let barGlass = Color(light: 0xFFFFFF, dark: 0x2A2B2F)
+    static let barGlass = Color(light: 0xFFFFFF, dark: 0x55565C)   // lighter grey glass, like the Claude composer
 
     // Aliases from the first (amber-heavy) design, now neutral.
     static let amber = text
