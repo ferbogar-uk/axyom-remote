@@ -14,6 +14,8 @@ struct ComandoView: View {
     @State private var showSettings = false
     @State private var search = ""
 
+    @State private var contentUnderBar = false
+
     var body: some View {
         NavigationStack(path: $path) {
             let board = filtered(model.board(project: project))
@@ -35,6 +37,7 @@ struct ComandoView: View {
                 .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
+            .contentBehindBar($contentUnderBar)
             .refreshable { try? await model.client?.refreshIndex() }
             .navigationDestination(for: String.self) { id in
                 switch id {
@@ -284,7 +287,7 @@ struct ComandoView: View {
                 }
                 .font(.headline).foregroundStyle(pcOnline ? Theme.text : Theme.muted)
                 .frame(maxWidth: .infinity, minHeight: 48)
-                .background(Theme.text.opacity(0.08), in: Capsule())
+                .contentShape(Capsule())
             }
             .disabled(!pcOnline)
             Button { talk() } label: {
@@ -301,7 +304,9 @@ struct ComandoView: View {
         }
         .padding(10)
         .glassBar(Capsule())
+            // Dark surround: bar top to screen bottom, a little inside the bar.
+            .background { FrostedBackdrop(active: contentUnderBar) }
         .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
-        .background(FrostedBackdrop())
+
     }
 }

@@ -21,6 +21,9 @@ public struct TranscriptJoiner: Equatable, Sendable {
     public mutating func update(_ latest: String) -> String {
         let new = latest.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !new.isEmpty else { return text }
+        // The same phrase sent again after it was committed (iOS repeats the
+        // final result): keep it once.
+        if partial.isEmpty, let last = committed.last, Self.words(last) == Self.words(new) { return text }
         if !partial.isEmpty, !new.isEmpty, Self.isRestart(previous: partial, next: new) {
             committed.append(partial)
         }

@@ -24,6 +24,8 @@ final class SpeechListener: ObservableObject {
     @Published var listening = false
     /// Microphone off, waiting for the server's transcription (listening is still true).
     @Published var transcribing = false
+    /// Microphone loudness 0…1 (smoothed), for the blue glow.
+    @Published var level: CGFloat = 0
     @Published var problem: String?
     /// Whether the last recognition ran on the iPhone (false = Apple's servers).
     @Published var onDevice = true
@@ -44,6 +46,10 @@ final class SpeechListener: ObservableObject {
     private var autoStop = false
     private var collector: PCMCollector?
     private var sttTask: Task<Void, Never>?
+    /// Bumped on every new recognition task and on stop: a late result from an
+    /// old task (iOS sends one more "final" after we stop) is ignored. It used
+    /// to be added again, so what you said appeared twice.
+    private var generation = 0
     /// Seconds of silence after speech that end listening when auto-stop is on.
     /// 1.8 s: pauses no longer erase what was said (TranscriptJoiner keeps it),
     /// so the wait can be shorter than AVA's 2.5 s; tapping still sends at once.
@@ -91,8 +97,12 @@ final class SpeechListener: ObservableObject {
             collector = keep
             input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
                 keep?.append(buffer)
+                let loud = Self.loudness(buffer)
                 // The current request changes when a task is restarted after a pause.
-                Task { @MainActor in self?.request?.append(buffer) }
+                Task { @MainActor in
+                    self?.request?.append(buffer)
+                    if let self { self.level = self.level * 0.6 + loud * 0.4 }
+                }
             }
             engine.prepare()
             try engine.start()
@@ -114,9 +124,11 @@ final class SpeechListener: ObservableObject {
         request.shouldReportPartialResults = true
         if #available(iOS 16, *) { request.addsPunctuation = true }
         self.request = request
+        generation += 1
+        let mine = generation
         task = recognizer.recognitionTask(with: request) { [weak self] result, error in
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard let self, self.generation == mine, self.listening, !self.transcribing else { return }
                 if let text = result?.bestTranscription.formattedString {
                     self.transcript = self.joiner.update(text)
                     self.armSilenceTimer()
@@ -140,8 +152,19 @@ final class SpeechListener: ObservableObject {
         }
     }
 
+    /// RMS of the first channel mapped to 0…1 (about -50 dB … -10 dB).
+    nonisolated static func loudness(_ buffer: AVAudioPCMBuffer) -> CGFloat {
+        guard let data = buffer.floatChannelData, buffer.frameLength > 0 else { return 0 }
+        let n = Int(buffer.frameLength)
+        var sum: Float = 0
+        for i in 0..<n { sum += data[0][i] * data[0][i] }
+        let db = 20 * log10(max(sqrt(sum / Float(n)), 1e-6))
+        return CGFloat(min(1, max(0, (db + 50) / 40)))
+    }
+
     /// Stop listening. `discard` (leaving the conversation) skips the server transcription.
     func stop(discard: Bool = false) {
+        level = 0
         silenceTimer?.invalidate()
         silenceTimer = nil
         if discard, transcribing {
@@ -151,6 +174,7 @@ final class SpeechListener: ObservableObject {
             return
         }
         guard !transcribing, listening || engine.isRunning else { return }
+        generation += 1          // ignore anything the old task still sends
         joiner.commit()
         transcript = joiner.text
         engine.stop()

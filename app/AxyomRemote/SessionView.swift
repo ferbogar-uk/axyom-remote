@@ -21,6 +21,7 @@ struct SessionView: View {
     @State private var draft = ""
     @State private var choices: [String: [String: Set<String>]] = [:]   // questionId -> question -> labels
     @State private var planFeedback: [String: String] = [:]
+    @State private var contentUnderBar = false
     @State private var conversation = false
     @State private var phase: ConversationPhase = .idle
     @State private var lastReply: String?
@@ -35,6 +36,10 @@ struct SessionView: View {
     @State private var expandedSteps: Set<String> = []
     @State private var atBottom = true
     @State private var unseen = 0
+    /// Auto-scroll: on while you are at the end; off as soon as you drag up to
+    /// read older messages; back on when you tap the arrow or scroll to the end.
+    @State private var follow = true
+    @State private var dragging = false
     @State private var viewportHeight: CGFloat = 800
     @State private var searching = false
     @State private var query = ""
@@ -125,37 +130,38 @@ struct SessionView: View {
             .onPreferenceChange(EndOffsetKey.self) { y in
                 let bottom = y <= viewportHeight + 60
                 if bottom != atBottom { atBottom = bottom }
-                if bottom { unseen = 0 }
+                if bottom { unseen = 0; if !dragging { follow = true } }
             }
+            // Dragging the conversation down (to see older messages) stops the auto-scroll.
+            .simultaneousGesture(DragGesture(minimumDistance: 12)
+                .onChanged { v in dragging = true; if v.translation.height > 12 { follow = false } }
+                .onEnded { _ in dragging = false })
             .scrollDismissesKeyboard(.interactively)
+            .contentBehindBar($contentUnderBar)
             .onChange(of: allItems.count) { old, new in
-                // Follow new messages only when you are already at the end; otherwise count them.
-                if atBottom || old == 0 {
+                // New messages: follow them when auto-scroll is on; otherwise count them.
+                if follow || old == 0 {
                     DispatchQueue.main.async { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
                 } else {
                     unseen += max(0, new - old)
                 }
+            }
+            .onChange(of: growthKey) { _, _ in
+                // A reply growing in place, steps, "A pensar…": keep the newest in view.
+                guard follow else { return }
+                DispatchQueue.main.async { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("end", anchor: .bottom) } }
             }
             .onChange(of: scrollTarget) { _, id in
                 guard let id else { return }
                 withAnimation { proxy.scrollTo(id, anchor: .center) }
             }
             .overlay(alignment: .bottom) {
-                if !atBottom && !allItems.isEmpty {
+                if (!atBottom || !follow) && !allItems.isEmpty {
                     Button {
                         withAnimation { proxy.scrollTo("end", anchor: .bottom) }
                         unseen = 0
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "arrow.down")
-                            if unseen > 0 { Text("\(unseen) nova\(unseen == 1 ? "" : "s")") }
-                        }
-                        .font(.footnote.weight(.semibold)).foregroundStyle(Theme.text)
-                        .padding(.horizontal, 14).frame(minHeight: 36)
-                        .background(Theme.surface, in: Capsule())
-                        .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
-                        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
-                    }
+                        follow = true
+                    } label: { jumpLabel }
                     .padding(.bottom, 8)
                     .accessibilityLabel(unseen > 0 ? "Ir para o fim, \(unseen) mensagens novas" : "Ir para o fim")
                 }
@@ -245,18 +251,6 @@ struct SessionView: View {
                 if conversation, phase == .waiting { listenAgain() }
             }
         }
-        .overlay {
-            if conversation {
-                ConversationPanel(
-                    phase: phase,
-                    heard: listener.transcript,
-                    lastReply: lastReply,
-                    problem: listener.problem ?? actionError,
-                    onTapMain: tapMain,
-                    onEnd: endConversation)
-                .transition(.opacity)
-            }
-        }
         .onDisappear { listener.stop(); voice.stop() }
         .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 4, matching: .images)
         .onChange(of: photoItems) { _, items in
@@ -327,12 +321,21 @@ struct SessionView: View {
                     Text(listener.transcribing ? "A transcrever…" : listener.transcript.isEmpty ? "A ouvir…" : "“\(listener.transcript)”")
                         .font(.body).foregroundStyle(Theme.textSoft).lineLimit(4)
                 }
-                TextField("Responder ao agente…", text: $draft, axis: .vertical)
-                    .lineLimit(1...6)
-                    .focused($typing)
-                    .font(.body)
-                    .foregroundStyle(Theme.text)
-                    .padding(.horizontal, 4)
+                if conversation {
+                    // Conversation: what you say, in italics, in place of the text field (like Claude's voice mode).
+                    Text(phase == .listening && !listener.transcript.isEmpty ? listener.transcript : " ")
+                        .font(.body.italic()).foregroundStyle(Theme.text).lineLimit(3)
+                        .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
+                        .padding(.horizontal, 4)
+                        .accessibilityLabel(listener.transcript.isEmpty ? "Conversa por voz" : listener.transcript)
+                } else {
+                    TextField("", text: $draft, prompt: Text("Responder ao agente…").foregroundStyle(Theme.textSoft), axis: .vertical)
+                        .lineLimit(1...6)
+                        .focused($typing)
+                        .font(.body)
+                        .foregroundStyle(Theme.text)
+                        .padding(.horizontal, 4)
+                }
                 HStack(spacing: 10) {
                     Menu {
                         Button { showPhotos = true } label: { Label("Escolher fotografias", systemImage: "photo.on.rectangle") }
@@ -345,30 +348,107 @@ struct SessionView: View {
                     modelChip
                     Spacer(minLength: 0)
                     Button {
+                        if conversation { endConversation(); return }
                         voice.stop()
                         listener.toggle(autoStop: false)
                     } label: {
-                        Image(systemName: listener.listening && !conversation ? "stop.fill" : "mic")
+                        Image(systemName: conversation ? "xmark" : listener.listening ? "stop.fill" : "mic")
                             .font(.body.weight(.semibold)).foregroundStyle(Theme.text)
                             .frame(width: 40, height: 40).background(Theme.text.opacity(0.08), in: Circle())
                     }
-                    .accessibilityLabel(listener.listening ? "Parar o ditado" : "Ditar")
+                    .accessibilityLabel(conversation ? "Terminar conversa por voz" : listener.listening ? "Parar o ditado" : "Ditar")
                     actionButton
                 }
             }
             .padding(14)
             .glassBar(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            // Dark surround: bar top to screen bottom, a little inside the bar.
+            .background(alignment: .bottom) {
+                // Layers behind the glass, back to front: dark surround, then the voice light.
+                ZStack(alignment: .bottom) {
+                    FrostedBackdrop(cornerRadius: 26, active: contentUnderBar)
+                    if voiceGlowing {
+                        ScreenGlow(color: phase == .listening ? Theme.voiceBlue : Theme.accent,
+                                   level: phase == .listening ? listener.level : nil)
+                            .padding(.horizontal, -12)
+                            .frame(height: 440)
+                            .offset(y: 66)        // down through the home-indicator area to the screen edge
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.35), value: voiceGlowing)
+            }
+            .onChange(of: phase) { old, new in phaseHaptic(old, new) }
+            .overlay {
+                if conversation && phase == .listening {
+                    VoiceGlow(color: Theme.voiceBlue, level: listener.level)
+                } else if conversation && phase == .speaking {
+                    VoiceGlow(color: Theme.accent, level: nil)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: phase)
         }
         .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
-        .background(FrostedBackdrop())
     }
+
+    /// "↓ 3 novas": clearly visible over the conversation.
+    private var jumpLabel: some View {
+        let shape = Capsule()
+        return HStack(spacing: 6) {
+            Image(systemName: "arrow.down")
+            if unseen > 0 { Text(unseen == 1 ? "1 nova" : "\(unseen) novas") }
+        }
+        .font(.footnote.weight(.bold))
+        .foregroundStyle(Theme.text)
+        .padding(.horizontal, 14)
+        .frame(minWidth: 40, minHeight: 40)
+        .background(shape.fill(Theme.barGlass.opacity(0.9)))
+        .overlay(shape.stroke(Color.white.opacity(0.28), lineWidth: 1))
+        .shadow(color: Color.black.opacity(0.35), radius: 10, y: 3)
+    }
+
+    /// Light tap when the app starts listening and when the agent's reply arrives.
+    private func phaseHaptic(_ old: ConversationPhase, _ new: ConversationPhase) {
+        if new == .listening && old != .listening { Prefs.tap() }
+        if new == .speaking && old == .waiting { Prefs.tap() }
+    }
+
+    /// Changes whenever the end of the conversation changes size without a new message.
+    private var growthKey: String {
+        "\(allItems.last?.id ?? "")|\(allItems.last?.raw.count ?? 0)|\(session?.isExecuting == true)|\(phase)"
+    }
+
+    private var voiceGlowing: Bool { conversation && (phase == .listening || phase == .speaking) }
 
     private var hasContent: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty
     }
 
     /// Orange: waveform (start voice conversation) when empty, arrow (send) when there is something to send.
-    private var actionButton: some View {
+    /// In a voice conversation the orange button follows the phase:
+    /// listening → send now, speaking → interrupt, thinking → wait, idle → talk.
+    @ViewBuilder private var actionButton: some View {
+        if conversation && !hasContent {
+            let icon = switch phase {
+            case .listening: "arrow.up"
+            case .speaking: "stop.fill"
+            case .waiting: "ellipsis"
+            case .idle: "waveform"
+            }
+            Button(action: tapMain) {
+                Image(systemName: icon)
+                    .font(.body.weight(.bold)).foregroundStyle(Theme.onAccent)
+                    .frame(width: 44, height: 44).background(Theme.accent, in: Circle())
+                    .opacity(phase == .waiting ? 0.45 : 1)
+            }
+            .disabled(phase == .waiting)
+            .accessibilityLabel(phase == .listening ? "Enviar já" : phase == .speaking ? "Interromper" : phase == .waiting ? "À espera do agente" : "Falar")
+        } else {
+            sendButton
+        }
+    }
+
+    private var sendButton: some View {
         Button {
             if hasContent {
                 let text = draft
@@ -678,8 +758,9 @@ struct SessionView: View {
         .padding(.horizontal, 12).padding(.vertical, 6)
     }
 
-    private func copyButton(_ text: String) -> some View {
+    @ViewBuilder private func copyButton(_ text: String) -> some View {
         Button { UIPasteboard.general.string = text; Prefs.tap() } label: { Label("Copiar", systemImage: "doc.on.doc") }
+        ShareLink(item: text) { Label("Partilhar", systemImage: "square.and.arrow.up") }
     }
 
     // MARK: Prompt cards
