@@ -28,6 +28,13 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
     public var draftUpdatedAt: Double?
     public var messageCount: Int?
     public var createdAt: Date?
+    /// Hierarchy as on the PC: the parent session (workstream, worktree or meta-agent).
+    public var parentId: String?
+    public var agentRole: String?
+    public var sessionType: String?
+    /// Kanban phase from the PC: backlog, planning, implementing, validating, complete.
+    public var phase: String?
+    public var isPinned: Bool = false
 
     /// New messages since anyone last read it (and not waiting on you, which shows its own way).
     public var isUnread: Bool {
@@ -74,14 +81,16 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
         var pending = entry.hasPendingPrompt ?? false
         var draft: String?
         var draftAt: Double?
+        var phase: String?
         if let meta = entry.encryptedClientMetadata, let iv = entry.clientMetadataIv,
            let json = try? crypto.decrypt(ciphertext: meta, iv: iv),
            let value = try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)) {
             if let flag = value["hasPendingPrompt"]?.bool { pending = flag }
             draft = value["draftInput"]?.string
             draftAt = value["draftUpdatedAt"]?.number
+            phase = value["phase"]?.string
         }
-        return FleetSession(
+        var s = FleetSession(
             id: entry.sessionId,
             title: title,
             projectId: projectId,
@@ -103,6 +112,12 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
                 (try? crypto.decrypt(ciphertext: q.encryptedPrompt, iv: q.iv)).map { QueuedPreview(id: q.id, text: $0) }
             }
         )
+        s.parentId = entry.parentSessionId ?? entry.createdBySessionId
+        s.agentRole = entry.agentRole
+        s.sessionType = entry.sessionType
+        s.phase = phase
+        s.isPinned = entry.isPinned ?? false
+        return s
     }
 }
 

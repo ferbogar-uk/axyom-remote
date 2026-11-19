@@ -62,6 +62,9 @@ public struct SessionIndexEntry: Codable, Equatable, Sendable {
     public var parentSessionId: String?
     public var hostDeviceId: String?
     public var agentRole: String?
+    /// Meta-agent that spawned this session (drives the PC's grouping).
+    public var createdBySessionId: String?
+    public var worktreeId: String?
     public var isArchived: Bool?
     public var isPinned: Bool?
     public var messageCount: Int?
