@@ -182,6 +182,12 @@ Exact contract in axyom-backend/sync/PROTOCOL.md, "Voice". Auth on both:
   monthly_cap | azure_busy; 503 not_configured; 502 azure_auth | azure_error.
   Fall back to the system voice on anything but 200.
 - `/voice/stt` is not implemented yet.
+- 19 Nov 2026 (axyom-backend, server filter): /voice/tts now runs the
+  desktop's speech filter before Azure (code blocks, paths, markdown, emojis
+  out; Portuguese abbreviations kept). Send the reply text as written; no
+  cleaning needed on the phone. `"raw": true` skips it. 422
+  `nothing_to_say` means there is nothing to read: stay silent, do NOT fall
+  back to the system voice for that text.
 Secrets AZURE_SPEECH_KEY / AZURE_SPEECH_REGION: Ricardo pastes them with the
 "AXYOM - chave Azure no servidor" script on his desktop. Until then
 /voice/status says configured: false. Tests: 6 unit tests
