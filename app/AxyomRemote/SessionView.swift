@@ -39,6 +39,8 @@ struct SessionView: View {
     /// Auto-scroll: on while you are at the end; off as soon as you drag up to
     /// read older messages; back on when you tap the arrow or scroll to the end.
     @State private var follow = true
+    /// Reads the live reply sentence by sentence while it is written.
+    @State private var feeder = SentenceFeeder()
     @State private var dragging = false
     @State private var viewportHeight: CGFloat = 800
     @State private var searching = false
@@ -108,7 +110,11 @@ struct SessionView: View {
                     if !loading && visible.isEmpty && failure == nil {
                         Text("Esta sessão ainda não tem mensagens legíveis.").font(.subheadline).foregroundStyle(Theme.muted)
                     }
-                    if session?.isExecuting == true {
+                    if let live = liveText {
+                        // The reply as the agent writes it (request #11); replaced by the final message.
+                        MarkdownText(text: live + " ▍")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else if session?.isExecuting == true {
                         WorkingLine(label: AgentActivity.current(allItems))
                     }
                     ForEach(PendingPrompts.permissions(in: allItems)) { permissionCard($0) }
@@ -241,14 +247,15 @@ struct SessionView: View {
         // Reply finished being read aloud: open the microphone again.
         .onChange(of: voice.speaking) { was, now in
             guard was, !now, conversation, phase == .speaking else { return }
-            listenAgain()
+            // Still writing: wait for the rest instead of opening the microphone.
+            if session?.isExecuting == true || liveText != nil { phase = .waiting } else { listenAgain() }
         }
         // Agent finished but said nothing readable (only tools): don't hang in "waiting".
         .onChange(of: session?.isExecuting ?? false) { was, now in
             guard was, !now, conversation, phase == .waiting else { return }
             Task {
-                try? await Task.sleep(nanoseconds: 9_000_000_000)
-                if conversation, phase == .waiting { listenAgain() }
+                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                if conversation, phase == .waiting, !voice.speaking { listenAgain() }
             }
         }
         .onDisappear { listener.stop(); voice.stop() }
@@ -378,7 +385,11 @@ struct SessionView: View {
                 }
                 .animation(.easeInOut(duration: 0.35), value: voiceGlowing)
             }
-            .onChange(of: phase) { old, new in phaseHaptic(old, new) }
+            .onChange(of: phase) { old, new in
+                phaseHaptic(old, new)
+                if new == .listening { feeder.reset() }
+            }
+            .onChange(of: liveText) { _, text in speakLive(text) }
             .overlay {
                 if conversation && phase == .listening {
                     VoiceGlow(color: Theme.voiceBlue, level: listener.level)
@@ -415,7 +426,19 @@ struct SessionView: View {
 
     /// Changes whenever the end of the conversation changes size without a new message.
     private var growthKey: String {
-        "\(allItems.last?.id ?? "")|\(allItems.last?.raw.count ?? 0)|\(session?.isExecuting == true)|\(phase)"
+        "\(allItems.last?.id ?? "")|\(allItems.last?.raw.count ?? 0)|\(session?.isExecuting == true)|\(phase)|\(liveText?.count ?? -1)"
+    }
+
+    private var liveText: String? { model.snapshot.liveText[sessionId] }
+
+    /// In a voice conversation, speak each sentence of the live reply as soon as it is complete.
+    private func speakLive(_ text: String?) {
+        guard conversation, let text else { return }
+        let sentences = feeder.feed(text)
+        guard !sentences.isEmpty else { return }
+        if listener.listening { listener.stop(discard: true) }
+        phase = .speaking
+        voice.speak(sentences)
     }
 
     private var voiceGlowing: Bool { conversation && (phase == .listening || phase == .speaking) }
@@ -1066,15 +1089,20 @@ struct SessionView: View {
         if added.contains(where: { $0.direction == "output" }) { notice = nil }
         let id = sessionId
         Task { try? await model.client?.markRead(sessionId: id) }
+        if added.contains(where: { $0.direction == "output" }) {
+            Task { await model.client?.clearLiveText(sessionId: id) }
+        }
         if conversation {
             let after = ChatLines.build(allItems, provider: provider).filter { !$0.mine }.map(\.text)
-            let spoken = Array(after.dropFirst(before.count))
-            if !spoken.isEmpty {
-                if listener.listening { listener.stop() }
-                lastReply = spoken.last
+            let fresh = Array(after.dropFirst(before.count))
+            // Whatever was already read from the live text is not read again.
+            if !fresh.isEmpty, let rest = feeder.finish(fresh.joined(separator: "\n")) {
+                if listener.listening { listener.stop(discard: true) }
+                lastReply = fresh.last
                 phase = .speaking
-                voice.speak(spoken.map { $0.count > 600 ? String($0.prefix(600)) + "…" : $0 })
+                voice.speak([rest.count > 1200 ? String(rest.prefix(1200)) + "…" : rest])
             }
+            feeder.reset()
         }
     }
 }
