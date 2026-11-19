@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Frosted graphite band from the floating bar to the bottom edge, full width:
-/// whatever scrolls underneath is blurred (you can tell something is there but
-/// not read it). Fades in at the top so there is no hard line. Solid when the
-/// user turns on Reduce Transparency.
+/// See-through band from the floating bar to the bottom edge, full width, in
+/// the screen's own background colour (no grey band): what scrolls underneath
+/// is blurred and dimmed, so you can tell something is there but not read it.
+/// Fades in at the top so there is no hard line. Solid when the user turns on
+/// Reduce Transparency.
 struct FrostedBackdrop: View {
     @Environment(\.accessibilityReduceTransparency) private var reduce
 
@@ -13,7 +14,7 @@ struct FrostedBackdrop: View {
                 Theme.background
             } else {
                 Rectangle().fill(.ultraThinMaterial)
-                Theme.graphiteGlass.opacity(0.55)
+                Theme.background.opacity(0.62)
             }
         }
         .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.28), .init(color: .black, location: 1)],
