@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// See-through band from the floating bar to the bottom edge, full width, in
+/// Strip below the floating bar to the bottom edge of the screen (not behind
+/// the bar), full width, in
 /// the screen's own background colour (no grey band): what scrolls underneath
 /// is blurred and dimmed, so you can tell something is there but not read it.
 /// Fades in at the top so there is no hard line. Solid when the user turns on
@@ -14,12 +15,11 @@ struct FrostedBackdrop: View {
                 Theme.background
             } else {
                 // No system material: it always lifts the colour towards grey.
-                // Plain background colour, slightly see-through.
-                Theme.background
+                // Background colour, only a faint shadow of what scrolls past.
+                Theme.background.opacity(0.9)
             }
         }
-        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black.opacity(0.75), location: 0.3),
-                                     .init(color: .black.opacity(0.94), location: 0.6), .init(color: .black, location: 1)],
+        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.45), .init(color: .black, location: 1)],
                              startPoint: .top, endPoint: .bottom))
         .ignoresSafeArea(edges: .bottom)
         .allowsHitTesting(false)
@@ -46,7 +46,7 @@ private struct GlassBar<S: InsettableShape>: ViewModifier {
                 } else {
                     ZStack {
                         shape.fill(.ultraThinMaterial)
-                        shape.fill(Theme.barGlass.opacity(0.38))
+                        shape.fill(Theme.barGlass.opacity(0.2))
                     }
                 }
             }

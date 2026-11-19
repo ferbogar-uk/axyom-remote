@@ -245,18 +245,6 @@ struct SessionView: View {
                 if conversation, phase == .waiting { listenAgain() }
             }
         }
-        .overlay {
-            if conversation {
-                ConversationPanel(
-                    phase: phase,
-                    heard: listener.transcript,
-                    lastReply: lastReply,
-                    problem: listener.problem ?? actionError,
-                    onTapMain: tapMain,
-                    onEnd: endConversation)
-                .transition(.opacity)
-            }
-        }
         .onDisappear { listener.stop(); voice.stop() }
         .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 4, matching: .images)
         .onChange(of: photoItems) { _, items in
@@ -321,11 +309,17 @@ struct SessionView: View {
             if let problem = listener.problem { Text(problem).font(.caption).foregroundStyle(Theme.danger).padding(.horizontal, 8) }
             if !online { Text("O PC está offline: a resposta fica guardada e corre quando ele ligar.").font(.caption).foregroundStyle(Theme.muted).padding(.horizontal, 8) }
             queueTray
+            if conversation && phase == .waiting {
+                ThinkingDots().padding(.horizontal, 12).padding(.bottom, 2)
+            }
             VStack(alignment: .leading, spacing: 10) {
                 AttachmentTray(images: $images)
                 if listener.listening && !conversation {
                     Text(listener.transcribing ? "A transcrever…" : listener.transcript.isEmpty ? "A ouvir…" : "“\(listener.transcript)”")
                         .font(.body).foregroundStyle(Theme.textSoft).lineLimit(4)
+                } else if conversation, !listener.transcript.isEmpty, phase == .listening {
+                    // Conversation: what you are saying, faint; no "a ouvir" label (the blue glow says it).
+                    Text(listener.transcript).font(.body).foregroundStyle(Theme.muted).lineLimit(3)
                 }
                 TextField("Responder ao agente…", text: $draft, axis: .vertical)
                     .lineLimit(1...6)
@@ -345,22 +339,32 @@ struct SessionView: View {
                     modelChip
                     Spacer(minLength: 0)
                     Button {
+                        if conversation { endConversation(); return }
                         voice.stop()
                         listener.toggle(autoStop: false)
                     } label: {
-                        Image(systemName: listener.listening && !conversation ? "stop.fill" : "mic")
+                        Image(systemName: conversation ? "xmark" : listener.listening ? "stop.fill" : "mic")
                             .font(.body.weight(.semibold)).foregroundStyle(Theme.text)
                             .frame(width: 40, height: 40).background(Theme.text.opacity(0.08), in: Circle())
                     }
-                    .accessibilityLabel(listener.listening ? "Parar o ditado" : "Ditar")
+                    .accessibilityLabel(conversation ? "Terminar conversa por voz" : listener.listening ? "Parar o ditado" : "Ditar")
                     actionButton
                 }
             }
             .padding(14)
             .glassBar(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .overlay {
+                if conversation && phase == .listening {
+                    VoiceGlow(color: Theme.voiceBlue, level: listener.level)
+                } else if conversation && phase == .speaking {
+                    VoiceGlow(color: Theme.accent, level: nil)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: phase)
         }
         .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
-        .background(FrostedBackdrop())
+        // Dark strip only under the bar (its lower edge to the screen bottom).
+        .background(alignment: .bottom) { FrostedBackdrop().frame(height: 14) }
     }
 
     private var hasContent: Bool {
@@ -368,7 +372,30 @@ struct SessionView: View {
     }
 
     /// Orange: waveform (start voice conversation) when empty, arrow (send) when there is something to send.
-    private var actionButton: some View {
+    /// In a voice conversation the orange button follows the phase:
+    /// listening → send now, speaking → interrupt, thinking → wait, idle → talk.
+    @ViewBuilder private var actionButton: some View {
+        if conversation && !hasContent {
+            let icon = switch phase {
+            case .listening: "arrow.up"
+            case .speaking: "stop.fill"
+            case .waiting: "ellipsis"
+            case .idle: "waveform"
+            }
+            Button(action: tapMain) {
+                Image(systemName: icon)
+                    .font(.body.weight(.bold)).foregroundStyle(Theme.onAccent)
+                    .frame(width: 44, height: 44).background(Theme.accent, in: Circle())
+                    .opacity(phase == .waiting ? 0.45 : 1)
+            }
+            .disabled(phase == .waiting)
+            .accessibilityLabel(phase == .listening ? "Enviar já" : phase == .speaking ? "Interromper" : phase == .waiting ? "À espera do agente" : "Falar")
+        } else {
+            sendButton
+        }
+    }
+
+    private var sendButton: some View {
         Button {
             if hasContent {
                 let text = draft

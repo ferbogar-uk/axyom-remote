@@ -24,6 +24,8 @@ final class SpeechListener: ObservableObject {
     @Published var listening = false
     /// Microphone off, waiting for the server's transcription (listening is still true).
     @Published var transcribing = false
+    /// Microphone loudness 0…1 (smoothed), for the blue glow.
+    @Published var level: CGFloat = 0
     @Published var problem: String?
     /// Whether the last recognition ran on the iPhone (false = Apple's servers).
     @Published var onDevice = true
@@ -91,8 +93,12 @@ final class SpeechListener: ObservableObject {
             collector = keep
             input.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
                 keep?.append(buffer)
+                let loud = Self.loudness(buffer)
                 // The current request changes when a task is restarted after a pause.
-                Task { @MainActor in self?.request?.append(buffer) }
+                Task { @MainActor in
+                    self?.request?.append(buffer)
+                    if let self { self.level = self.level * 0.6 + loud * 0.4 }
+                }
             }
             engine.prepare()
             try engine.start()
@@ -140,8 +146,19 @@ final class SpeechListener: ObservableObject {
         }
     }
 
+    /// RMS of the first channel mapped to 0…1 (about -50 dB … -10 dB).
+    nonisolated static func loudness(_ buffer: AVAudioPCMBuffer) -> CGFloat {
+        guard let data = buffer.floatChannelData, buffer.frameLength > 0 else { return 0 }
+        let n = Int(buffer.frameLength)
+        var sum: Float = 0
+        for i in 0..<n { sum += data[0][i] * data[0][i] }
+        let db = 20 * log10(max(sqrt(sum / Float(n)), 1e-6))
+        return CGFloat(min(1, max(0, (db + 50) / 40)))
+    }
+
     /// Stop listening. `discard` (leaving the conversation) skips the server transcription.
     func stop(discard: Bool = false) {
+        level = 0
         silenceTimer?.invalidate()
         silenceTimer = nil
         if discard, transcribing {

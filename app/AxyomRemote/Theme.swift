@@ -18,6 +18,8 @@ enum Theme {
     static let danger = Color(light: 0xD23F4B, dark: 0xFF929B)
 
     /// The orange of the brand, only for send and voice.
+    /// Your voice in a conversation (the app's voice is the orange accent).
+    static let voiceBlue = Color(light: 0x2F7BFF, dark: 0x4C93FF)
     static let accent = Color(hex: 0xFF8A1F)   // brand orange, more saturated (Ricardo, 18 Nov)
     static let onAccent = Color(hex: 0x0B0B0C)
 
