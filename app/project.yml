@@ -26,13 +26,19 @@ targets:
     platform: iOS
     sources:
       - AxyomRemote
+      - Shared
     dependencies:
       - package: AxyomRemoteCore
+      - target: NotificationService
     # Push notifications (AXYOM sync server sends APNs alerts; App ID has Push on).
+    # The keychain group is shared with the notification extension (session titles).
     entitlements:
       path: AxyomRemote/AxyomRemote.entitlements
       properties:
         aps-environment: production
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.axyom.remote
+          - $(AppIdentifierPrefix)com.axyom.remote.shared
     # Extra Info.plist keys, merged with the generated ones (GENERATE_INFOPLIST_FILE).
     info:
       path: AxyomRemote/Info.plist
@@ -61,3 +67,33 @@ targets:
         CODE_SIGN_STYLE: Automatic
         # Signing team is chosen in Xcode / CI secrets. Never commit one here.
         DEVELOPMENT_TEAM: ""
+
+  # Rewrites the server's generic push into agent, conversation and project.
+  NotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - NotificationService
+      - Shared
+    dependencies:
+      - package: AxyomRemoteCore
+    entitlements:
+      path: NotificationService/NotificationService.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.axyom.remote.shared
+    info:
+      path: NotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: AXYOM
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.axyom.remote.NotificationService
+        PRODUCT_NAME: NotificationService
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES

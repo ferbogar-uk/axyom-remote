@@ -243,9 +243,10 @@ public enum ServerMessage: Equatable, Sendable {
         case "error":
             let e = try d.decode(Err.self, from: data)
             return .error(code: e.code, message: e.message, requestId: e.requestId)
-        case "registerPushTokenResult":
+        case "registerPushTokenResult", "pushTokenRegistered":
+            // The server answers `pushTokenRegistered` (PROTOCOL.md); no `ok` field means it was stored.
             let r = try d.decode(PushResult.self, from: data)
-            return .registerPushTokenResult(deviceId: r.deviceId, ok: r.ok ?? false, pushConfigured: r.pushConfigured ?? false)
+            return .registerPushTokenResult(deviceId: r.deviceId, ok: r.ok ?? true, pushConfigured: r.pushConfigured ?? false)
         case "planUsageBroadcast":
             let u = try d.decode(Usage.self, from: data)
             return .planUsageBroadcast(deviceId: u.deviceId, encryptedUsage: u.encryptedUsage, usageIv: u.usageIv, updatedAt: u.updatedAt)

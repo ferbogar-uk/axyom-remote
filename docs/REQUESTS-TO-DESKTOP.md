@@ -243,3 +243,42 @@ code and shows cards for links and PC paths, but two things need the desktop:
    the phone asks, and only for paths the agent itself mentioned.
 
 Status: waiting for the desktop session.
+
+## 10. Push that says who, what and where
+
+Ricardo (19 Nov 2026): "Um agente terminou" is too vague; the alert must say
+which agent, which conversation and what it is about, still short.
+
+The phone now has a notification extension (build 23) that rewrites the
+alert to, for example:
+
+    Claude · Análise do repositório
+    Terminou · axyom-remote
+    Toca para ver a resposta.
+
+It takes the title, agent and project from what the app last saw, and
+decrypts extra fields when present. It only runs if the push asks for it.
+
+**Server (axyom-backend, pushPolicy/apns):**
+1. Add `"mutable-content": 1` inside `aps`. Without it iOS never runs the
+   extension and the generic text stays.
+2. Copy the session's stored encrypted title into the payload as
+   `encryptedTitle` + `titleIv` (the same ciphertext as the index entry; the
+   server still never reads it), so new sessions are named too.
+3. Pass through `encryptedSummary` + `summaryIv` when the desktop's
+   `requestMobilePush` carries them. Keep the whole payload under 4 KB (drop
+   the summary if it would not fit).
+4. Keep the generic Portuguese title/body as they are: they are the fallback
+   when the extension cannot run.
+
+**Desktop (AXYOM, requestMobilePush):**
+- Add `encryptedSummary`/`summaryIv`: one line, at most 160 characters,
+  encrypted with the session key, saying what it is about:
+  - waiting: the question or permission ("Quer permissão para editar AuthView.swift")
+  - finished: the first sentence of the agent's last reply
+  - error: the error in plain words
+- Never more than that line (no code, no paths beyond a file name).
+
+Status: waiting for the desktop/server session. Until then the phone shows
+the better text only in its own local notifications (app open or just in
+the background).
