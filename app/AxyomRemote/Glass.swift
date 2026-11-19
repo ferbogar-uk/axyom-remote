@@ -15,10 +15,11 @@ struct FrostedBackdrop: View {
             } else {
                 // No system material: it always lifts the colour towards grey.
                 // Plain background colour, slightly see-through.
-                Theme.background.opacity(0.72)
+                Theme.background
             }
         }
-        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.28), .init(color: .black, location: 1)],
+        .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black.opacity(0.75), location: 0.3),
+                                     .init(color: .black.opacity(0.94), location: 0.6), .init(color: .black, location: 1)],
                              startPoint: .top, endPoint: .bottom))
         .ignoresSafeArea(edges: .bottom)
         .allowsHitTesting(false)
