@@ -219,7 +219,17 @@ Proposal for the server:
 The phone gives up after 8 s and keeps Apple's live text, so a slow or
 missing endpoint never blocks a message.
 
-Status: waiting for the desktop/server session.
+Status: DONE on the server (axyom-backend 70f8b6a, deployed 19 Nov 2026).
+Exactly as proposed: `POST /voice/stt?lang=pt-BR` with the same JWT and a
+16 kHz mono 16-bit WAV (max 2 MB) → `{ "text", "lang", "seconds" }`, text ""
+for silence/NoMatch. Languages pt-BR (default), pt-PT, en-GB, en-US (other →
+400 `bad_lang`); not RIFF/WAVE → 400 `not_wav`; over 2 MB → 413. Seconds
+counted per month, cap `VOICE_MONTHLY_STT_SECONDS` = 18000 → 429
+`monthly_cap`; shares the 30/min limit with /voice/tts. `/voice/status` now
+has `stt: true`, `sttLanguages`, `usedSttSeconds`, `monthlySttSeconds`.
+Tested live: a WAV saying "Please run the tests on the server." came back word
+for word in 0.8 s (en-GB; this PC has no Portuguese test voice), silence → "".
+Not tested with the phone yet.
 
 ## 9. Worktree/branch and PC file previews for the iPhone
 
@@ -242,7 +252,24 @@ code and shows cards for links and PC paths, but two things need the desktop:
    `{ type: "filePreview", path, encryptedImage, iv }`. Nothing is sent unless
    the phone asks, and only for paths the agent itself mentioned.
 
-Status: waiting for the desktop session.
+Status: DONE on the desktop and the server (AXYOM backup 374e90a,
+axyom-backend 2cc4a1d, 19 Nov 2026).
+1. `worktreeName`, `branch`, `worktreePath` are in the encrypted client
+   metadata of the index entry (same blob as phase/tags), only for sessions in
+   a worktree. They are published by the desktop's index sync, so a session
+   that has not changed since may show them only after its next update.
+2. `file_preview` works as proposed. Reply in the session room:
+   `{ "type": "filePreview", "path": "<as asked>", "encryptedImage", "iv" }`.
+   Decrypt with the session key like a message: the plaintext is a **base64
+   JPEG** (longest side 800 px; a PDF is its first page, from Windows' own
+   thumbnail). The desktop answers only for images/PDFs (png, jpg, jpeg, gif,
+   webp, bmp, pdf) inside the session's workspace or worktree (symlinks
+   followed) that the agent mentioned in its messages; otherwise nothing comes
+   back, so time out after a few seconds. The server relays it and never
+   stores it (max 1.5 MB). Relative paths are read against the worktree, else
+   the workspace. Tested: 7 desktop unit tests (inside/outside, ../, symlink,
+   not mentioned, wrong type) and the live server relay. Not tested end to end
+   with the phone.
 
 ## 10. Push that says who, what and where
 
@@ -279,6 +306,19 @@ decrypts extra fields when present. It only runs if the push asks for it.
   - error: the error in plain words
 - Never more than that line (no code, no paths beyond a file name).
 
-Status: waiting for the desktop/server session. Until then the phone shows
-the better text only in its own local notifications (app open or just in
-the background).
+Status: DONE on the server and the desktop (axyom-backend 70f8b6a, AXYOM
+backup 374e90a, 19 Nov 2026).
+- Every alert has `"mutable-content": 1`.
+- `encryptedTitle` + `titleIv` are copied from the stored index entry.
+- `encryptedSummary` + `summaryIv` come from the desktop: one line, at most
+  160 characters, encrypted with the session key with the same scheme as a
+  title (`encrypt`, random IV). waiting → "Pede a tua aprovação para
+  continuar" or "Tem uma decisão para tomares" (the desktop does not yet put
+  the exact question in it); finished → the first sentence of the agent's
+  reply, markdown removed, paths reduced to the file name; error → the error's
+  first line.
+- Over 4 KB the summary is dropped first, then the title.
+- The generic Portuguese title/body stay as the fallback.
+Tested: unit tests on both sides and the live server (Apple still accepts the
+key). Not yet seen on the phone with the extension: needs the AXYOM build with
+these changes running (release12) and a real turn.
