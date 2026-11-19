@@ -13,6 +13,8 @@ struct ComandoView: View {
     @State private var path: [String] = []
     @State private var showSettings = false
     @State private var search = ""
+    /// Parents whose sub-agents are folded (like the chevrons on the PC).
+    @State private var collapsed: Set<String> = []
 
     @State private var contentUnderBar = false
 
@@ -28,9 +30,9 @@ struct ComandoView: View {
                     projectChips(board)
                     searchField
                     if !board.waiting.isEmpty { waitingSection(board.waiting) }
-                    if !board.working.isEmpty { workingSection(board.working) }
-                    if !board.recent.isEmpty { recentSection(board.recent) }
-                    if board.waiting.isEmpty && board.working.isEmpty && board.recent.isEmpty { emptyState }
+                    let sections = treeSections
+                    ForEach(sections) { treeSection($0) }
+                    if board.waiting.isEmpty && sections.isEmpty { emptyState }
                     archivedLink
                 }
                 .padding(.horizontal, 16)
@@ -251,6 +253,83 @@ struct ComandoView: View {
         }
         .padding(.horizontal, 14).frame(minHeight: 44)
         .background(Theme.elevated, in: Capsule())
+    }
+
+    /// All sessions of the chosen project, nested and grouped by day like the PC.
+    private var treeSections: [SessionTree.Section] {
+        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+        let all = model.snapshot.sessions.filter { project == nil || $0.projectId == project }
+        let match: (FleetSession) -> Bool = {
+            q.isEmpty || $0.title.lowercased().contains(q) || $0.projectName.lowercased().contains(q)
+                || ProviderName.display($0.provider).lowercased().contains(q)
+        }
+        // Searching shows matches flat; otherwise the PC's hierarchy.
+        if !q.isEmpty {
+            return SessionTree.build(all.filter(match).map { var s = $0; s.parentId = nil; return s })
+        }
+        return SessionTree.build(all, collapsed: collapsed)
+    }
+
+    private func treeSection(_ section: SessionTree.Section) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(section.title).sectionLabel()
+            VStack(spacing: 0) {
+                ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, r in
+                    treeRow(r)
+                    if index < section.rows.count - 1 { Divider().overlay(Theme.border).padding(.leading, 14 + CGFloat(r.depth) * 22) }
+                }
+            }
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Theme.border, lineWidth: 1))
+        }
+    }
+
+    private func treeRow(_ r: SessionTree.Row) -> some View {
+        let s = r.session
+        return HStack(spacing: 6) {
+            if r.childCount > 0 {
+                Button {
+                    if collapsed.contains(s.id) { collapsed.remove(s.id) } else { collapsed.insert(s.id) }
+                } label: {
+                    Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(Theme.muted)
+                        .rotationEffect(.degrees(collapsed.contains(s.id) ? 0 : 90))
+                        .frame(width: 22, height: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(collapsed.contains(s.id) ? "Mostrar \(r.childCount) sub-agentes" : "Esconder sub-agentes")
+            } else {
+                Color.clear.frame(width: 22)
+            }
+            NavigationLink(value: s.id) {
+                HStack(spacing: 10) {
+                    AgentBadge(provider: s.provider)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(s.title).font(r.depth == 0 ? .body : .subheadline).foregroundStyle(Theme.text).lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(s.isExecuting ? "A trabalhar" : RelativeAge.portuguese(from: s.lastActivity))
+                                .font(.caption).foregroundStyle(s.isExecuting ? Theme.green : Theme.muted)
+                            if let role = r.role { tag(role, color: r.depth == 0 ? Theme.accent : Theme.muted) }
+                            if let phase = r.phase { tag(phase, color: Theme.phase) }
+                        }
+                    }
+                    Spacer(minLength: 6)
+                    if s.hasPendingPrompt { Circle().fill(Theme.phase).frame(width: 8, height: 8).accessibilityLabel("À tua espera") }
+                    else if s.isUnread { Circle().fill(Theme.text).frame(width: 8, height: 8).accessibilityLabel("Não lida") }
+                }
+                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .contextMenu { sessionMenu(s) }
+        }
+        .padding(.leading, 6 + CGFloat(r.depth) * 22)
+        .padding(.trailing, 14).padding(.vertical, 4)
+    }
+
+    private func tag(_ text: String, color: Color) -> some View {
+        Text(text).font(.caption2.weight(.semibold)).foregroundStyle(color)
+            .padding(.horizontal, 7).padding(.vertical, 2)
+            .overlay(Capsule().stroke(color.opacity(0.6), lineWidth: 1))
     }
 
     /// Keep only sessions whose title, project or agent match the search.

@@ -29,6 +29,8 @@ enum Theme {
 
     // Aliases from the first (amber-heavy) design, now neutral.
     static let amber = text
+    /// Kanban phase tags, yellow like on the PC.
+    static let phase = Color(light: 0xA86B12, dark: 0xF2C14E)
     static let amberLight = text
     static let amberSurface = surface
     static let amberFill = elevated

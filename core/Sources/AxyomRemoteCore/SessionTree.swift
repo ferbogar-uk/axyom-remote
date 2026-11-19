@@ -54,7 +54,7 @@ public enum SessionTree {
         func add(_ s: FleetSession, depth: Int, section: String, seen: Set<String>) {
             let kids = (children[s.id] ?? []).sorted { $0.lastActivity > $1.lastActivity }
             let isLead = !kids.isEmpty && (s.agentRole == "meta-agent" || s.sessionType == "workstream" || depth == 0)
-            let role: String? = depth > 0 ? "Sub-agente" : (isLead ? "Orquestrador" : nil)
+            let role: String? = depth > 0 ? (kids.isEmpty ? "Sub-agente" : nil) : (isLead ? "Orquestrador" : nil)
             bySection[section, default: []].append(Row(session: s, depth: depth, childCount: kids.count,
                                                        role: role, phase: phaseLabel(s.phase)))
             guard !collapsed.contains(s.id), depth < 3 else { return }
