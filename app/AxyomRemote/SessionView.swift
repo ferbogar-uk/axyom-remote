@@ -21,6 +21,7 @@ struct SessionView: View {
     @State private var draft = ""
     @State private var choices: [String: [String: Set<String>]] = [:]   // questionId -> question -> labels
     @State private var planFeedback: [String: String] = [:]
+    @State private var contentUnderBar = false
     @State private var conversation = false
     @State private var phase: ConversationPhase = .idle
     @State private var lastReply: String?
@@ -128,6 +129,7 @@ struct SessionView: View {
                 if bottom { unseen = 0 }
             }
             .scrollDismissesKeyboard(.interactively)
+            .contentBehindBar($contentUnderBar)
             .onChange(of: allItems.count) { old, new in
                 // Follow new messages only when you are already at the end; otherwise count them.
                 if atBottom || old == 0 {
@@ -354,7 +356,7 @@ struct SessionView: View {
             .padding(14)
             .glassBar(RoundedRectangle(cornerRadius: 26, style: .continuous))
             // Dark surround: bar top to screen bottom, a little inside the bar.
-            .background { FrostedBackdrop(cornerRadius: 26) }
+            .background { FrostedBackdrop(cornerRadius: 26, active: contentUnderBar) }
             .overlay {
                 if conversation && phase == .listening {
                     VoiceGlow(color: Theme.voiceBlue, level: listener.level)
