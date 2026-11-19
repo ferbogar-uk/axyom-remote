@@ -373,8 +373,19 @@ struct SessionView: View {
             .animation(.easeInOut(duration: 0.25), value: phase)
         }
         .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
-
+        // Like Claude's voice mode: the bottom of the screen glows, blue while you talk, orange while the app speaks.
+        .background(alignment: .bottom) {
+            if voiceGlowing {
+                ScreenGlow(color: phase == .listening ? Theme.voiceBlue : Theme.accent,
+                           level: phase == .listening ? listener.level : nil)
+                    .frame(height: 380).offset(y: 60)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.35), value: voiceGlowing)
     }
+
+    private var voiceGlowing: Bool { conversation && (phase == .listening || phase == .speaking) }
 
     private var hasContent: Bool {
         !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !images.isEmpty
