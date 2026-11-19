@@ -282,3 +282,48 @@ decrypts extra fields when present. It only runs if the push asks for it.
 Status: waiting for the desktop/server session. Until then the phone shows
 the better text only in its own local notifications (app open or just in
 the background).
+
+## 11. Live reply text for the phone (`sessionStreamText`)
+
+Ricardo (19 Nov 2026): in a voice conversation the phone waits for the whole
+reply before it shows or reads anything. It should appear as the agent
+writes, and the phone should start reading the first sentence right away.
+
+Checked in axyom-v01: the desktop syncs persisted transcript rows only
+(`appendMessage`), so the phone first sees the reply when the assistant
+message is complete. Streaming deltas never leave the PC.
+
+The phone is ready (branch live-reply, build 35): it shows the live text in
+the conversation, reads each sentence as soon as it is complete, does not
+read again what it already read when the final row arrives, and only opens
+the microphone once the agent has finished.
+
+**Server (axyom-backend, one line):** add to `RELAYS` in sync/src/index.ts
+
+    sessionStreamText: { out: 'sessionStreamBroadcast', field: 'stream' },
+
+so the frame is forwarded to the user's other devices in the index room and
+never stored. Document it in PROTOCOL.md next to `sessionContextUpdate`.
+
+**Desktop (AXYOM):** while an agent streams the text of an assistant
+message (Claude Code `stream_event` text deltas, Codex `agent_message`
+deltas, the others where they exist), send on the index socket:
+
+    { "type": "sessionStreamText",
+      "stream": { "sessionId": "...",
+                  "encryptedText": "<whole text of this message so far>",
+                  "iv": "...",
+                  "seq": 17,
+                  "done": false } }
+
+- Encrypt with the same key and helper used for index fields
+  (`encryptData`, AES-256-GCM); send the **whole text so far**, not the delta,
+  so a lost frame costs nothing.
+- At most one frame every 250 ms per session, plus one right away when a
+  sentence ends (`.`, `!`, `?`, new line) so speech starts sooner.
+- `seq` increases per session; `done: true` (empty text allowed) when the
+  message completes, when a tool call starts, or when the turn is cancelled.
+- Only while some phone is connected to the index room (skip otherwise).
+- Text only: no thinking, no tool input/output.
+
+Status: waiting for the desktop/server session.
