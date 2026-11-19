@@ -36,6 +36,10 @@ struct SessionView: View {
     @State private var expandedSteps: Set<String> = []
     @State private var atBottom = true
     @State private var unseen = 0
+    /// Auto-scroll: on while you are at the end; off as soon as you drag up to
+    /// read older messages; back on when you tap the arrow or scroll to the end.
+    @State private var follow = true
+    @State private var dragging = false
     @State private var viewportHeight: CGFloat = 800
     @State private var searching = false
     @State private var query = ""
@@ -126,27 +130,37 @@ struct SessionView: View {
             .onPreferenceChange(EndOffsetKey.self) { y in
                 let bottom = y <= viewportHeight + 60
                 if bottom != atBottom { atBottom = bottom }
-                if bottom { unseen = 0 }
+                if bottom { unseen = 0; if !dragging { follow = true } }
             }
+            // Dragging the conversation down (to see older messages) stops the auto-scroll.
+            .simultaneousGesture(DragGesture(minimumDistance: 12)
+                .onChanged { v in dragging = true; if v.translation.height > 12 { follow = false } }
+                .onEnded { _ in dragging = false })
             .scrollDismissesKeyboard(.interactively)
             .contentBehindBar($contentUnderBar)
             .onChange(of: allItems.count) { old, new in
-                // Follow new messages only when you are already at the end; otherwise count them.
-                if atBottom || old == 0 {
+                // New messages: follow them when auto-scroll is on; otherwise count them.
+                if follow || old == 0 {
                     DispatchQueue.main.async { withAnimation { proxy.scrollTo("end", anchor: .bottom) } }
                 } else {
                     unseen += max(0, new - old)
                 }
+            }
+            .onChange(of: growthKey) { _, _ in
+                // A reply growing in place, steps, "A pensar…": keep the newest in view.
+                guard follow else { return }
+                DispatchQueue.main.async { withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo("end", anchor: .bottom) } }
             }
             .onChange(of: scrollTarget) { _, id in
                 guard let id else { return }
                 withAnimation { proxy.scrollTo(id, anchor: .center) }
             }
             .overlay(alignment: .bottom) {
-                if !atBottom && !allItems.isEmpty {
+                if (!atBottom || !follow) && !allItems.isEmpty {
                     Button {
                         withAnimation { proxy.scrollTo("end", anchor: .bottom) }
                         unseen = 0
+                        follow = true
                     } label: { jumpLabel }
                     .padding(.bottom, 8)
                     .accessibilityLabel(unseen > 0 ? "Ir para o fim, \(unseen) mensagens novas" : "Ir para o fim")
@@ -397,6 +411,11 @@ struct SessionView: View {
     private func phaseHaptic(_ old: ConversationPhase, _ new: ConversationPhase) {
         if new == .listening && old != .listening { Prefs.tap() }
         if new == .speaking && old == .waiting { Prefs.tap() }
+    }
+
+    /// Changes whenever the end of the conversation changes size without a new message.
+    private var growthKey: String {
+        "\(allItems.last?.id ?? "")|\(allItems.last?.raw.count ?? 0)|\(session?.isExecuting == true)|\(phase)"
     }
 
     private var voiceGlowing: Bool { conversation && (phase == .listening || phase == .speaking) }
