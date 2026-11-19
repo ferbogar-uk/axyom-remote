@@ -152,11 +152,11 @@ struct SessionView: View {
                             Image(systemName: "arrow.down")
                             if unseen > 0 { Text("\(unseen) nova\(unseen == 1 ? "" : "s")") }
                         }
-                        .font(.footnote.weight(.semibold)).foregroundStyle(Theme.text)
-                        .padding(.horizontal, 14).frame(minHeight: 36)
-                        .background(Theme.surface, in: Capsule())
-                        .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
-                        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+                        .font(.footnote.weight(.bold)).foregroundStyle(Theme.text)
+                        .padding(.horizontal, 14).frame(minWidth: 40, minHeight: 40)
+                        .background(Theme.barGlass.opacity(0.9), in: Capsule())
+                        .overlay(Capsule().stroke(Color.white.opacity(0.28), lineWidth: 1))
+                        .shadow(color: .black.opacity(0.35), radius: 10, y: 3)
                     }
                     .padding(.bottom, 8)
                     .accessibilityLabel(unseen > 0 ? "Ir para o fim, \(unseen) mensagens novas" : "Ir para o fim")
@@ -247,6 +247,7 @@ struct SessionView: View {
                 if conversation, phase == .waiting { listenAgain() }
             }
         }
+        .onChange(of: phase) { old, new in phaseHaptic(old, new) }
         .onDisappear { listener.stop(); voice.stop() }
         .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 4, matching: .images)
         .onChange(of: photoItems) { _, items in
@@ -323,12 +324,12 @@ struct SessionView: View {
                 if conversation {
                     // Conversation: what you say, in italics, in place of the text field (like Claude's voice mode).
                     Text(phase == .listening && !listener.transcript.isEmpty ? listener.transcript : " ")
-                        .font(.body.italic()).foregroundStyle(Theme.textSoft).lineLimit(3)
+                        .font(.body.italic()).foregroundStyle(Theme.text).lineLimit(3)
                         .frame(maxWidth: .infinity, minHeight: 22, alignment: .leading)
                         .padding(.horizontal, 4)
                         .accessibilityLabel(listener.transcript.isEmpty ? "Conversa por voz" : listener.transcript)
                 } else {
-                    TextField("Responder ao agente…", text: $draft, axis: .vertical)
+                    TextField("", text: $draft, prompt: Text("Responder ao agente…").foregroundStyle(Theme.textSoft), axis: .vertical)
                         .lineLimit(1...6)
                         .focused($typing)
                         .font(.body)
@@ -362,7 +363,21 @@ struct SessionView: View {
             .padding(14)
             .glassBar(RoundedRectangle(cornerRadius: 26, style: .continuous))
             // Dark surround: bar top to screen bottom, a little inside the bar.
-            .background { FrostedBackdrop(cornerRadius: 26, active: contentUnderBar && !voiceGlowing) }
+            .background(alignment: .bottom) {
+                // Layers behind the glass, back to front: dark surround, then the voice light.
+                ZStack(alignment: .bottom) {
+                    FrostedBackdrop(cornerRadius: 26, active: contentUnderBar)
+                    if voiceGlowing {
+                        ScreenGlow(color: phase == .listening ? Theme.voiceBlue : Theme.accent,
+                                   level: phase == .listening ? listener.level : nil)
+                            .padding(.horizontal, -12)
+                            .frame(height: 440)
+                            .offset(y: 66)        // down through the home-indicator area to the screen edge
+                            .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.35), value: voiceGlowing)
+            }
             .overlay {
                 if conversation && phase == .listening {
                     VoiceGlow(color: Theme.voiceBlue, level: listener.level)
@@ -373,16 +388,12 @@ struct SessionView: View {
             .animation(.easeInOut(duration: 0.25), value: phase)
         }
         .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
-        // Like Claude's voice mode: the bottom of the screen glows, blue while you talk, orange while the app speaks.
-        .background(alignment: .bottom) {
-            if voiceGlowing {
-                ScreenGlow(color: phase == .listening ? Theme.voiceBlue : Theme.accent,
-                           level: phase == .listening ? listener.level : nil)
-                    .frame(height: 380).offset(y: 60)
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.35), value: voiceGlowing)
+    }
+
+    /// Light tap when the app starts listening and when the agent's reply arrives.
+    private func phaseHaptic(_ old: ConversationPhase, _ new: ConversationPhase) {
+        if new == .listening && old != .listening { Prefs.tap() }
+        if new == .speaking && old == .waiting { Prefs.tap() }
     }
 
     private var voiceGlowing: Bool { conversation && (phase == .listening || phase == .speaking) }
@@ -725,8 +736,9 @@ struct SessionView: View {
         .padding(.horizontal, 12).padding(.vertical, 6)
     }
 
-    private func copyButton(_ text: String) -> some View {
+    @ViewBuilder private func copyButton(_ text: String) -> some View {
         Button { UIPasteboard.general.string = text; Prefs.tap() } label: { Label("Copiar", systemImage: "doc.on.doc") }
+        ShareLink(item: text) { Label("Partilhar", systemImage: "square.and.arrow.up") }
     }
 
     // MARK: Prompt cards

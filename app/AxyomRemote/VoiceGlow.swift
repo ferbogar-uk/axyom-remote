@@ -58,6 +58,8 @@ struct ScreenGlow: View {
             ZStack {
                 LinearGradient(colors: [color.opacity(0.16 + 0.22 * l), color.opacity(0.05), .clear],
                                startPoint: .bottom, endPoint: .top)
+                // Around the box itself (it sits near the bottom of this area).
+                RadialGradient(colors: [color.opacity(0.14 + 0.26 * l), .clear], center: UnitPoint(x: 0.5, y: 0.78), startRadius: 0, endRadius: 300)
                 RadialGradient(colors: [color.opacity(0.18 + 0.3 * l), .clear], center: .bottomLeading, startRadius: 0, endRadius: 240)
                 RadialGradient(colors: [color.opacity(0.18 + 0.3 * l), .clear], center: .bottomTrailing, startRadius: 0, endRadius: 240)
             }
