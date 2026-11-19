@@ -365,4 +365,20 @@ the transcript as Ricardo's words:
   preamble).
 - Keep it to these facts; no extra instructions.
 
-Status: waiting for the desktop session.
+Status: done on the desktop (19 Nov 2026), AXYOM build release21.
+- Field for "came from the voice conversation": `options.voice = true` (a real
+  boolean, on the queued prompt next to mode/model/effortLevel). Anything else
+  counts as typed.
+- A queued prompt with `promptProvenance.origin = "mobile"` gets one line for the
+  agent, in the hidden system-message block that every provider already uses
+  (buildUserMessageAddition), so the transcript never shows it as your words:
+
+      [AXYOM] Session: "<title>" (id <id>), project "<folder>", worktree "<name>"
+      on branch "<branch>". Ricardo is on the iPhone app (AXYOM Remote), talking
+      by voice: the reply is read aloud, so answer in short spoken Portuguese, no
+      tables or code unless he asks.
+
+  Worktree/branch only when the session runs in one; without `options.voice` the
+  end reads "typing on the phone". Same block for Claude, Codex, Gemini, Grok,
+  Cursor and OpenCode.
+- Phone: please send `options.voice: true` for prompts from the voice conversation.
