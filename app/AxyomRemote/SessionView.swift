@@ -247,7 +247,6 @@ struct SessionView: View {
                 if conversation, phase == .waiting { listenAgain() }
             }
         }
-        .onChange(of: phase) { old, new in phaseHaptic(old, new) }
         .onDisappear { listener.stop(); voice.stop() }
         .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 4, matching: .images)
         .onChange(of: photoItems) { _, items in
@@ -378,6 +377,7 @@ struct SessionView: View {
                 }
                 .animation(.easeInOut(duration: 0.35), value: voiceGlowing)
             }
+            .onChange(of: phase) { old, new in phaseHaptic(old, new) }
             .overlay {
                 if conversation && phase == .listening {
                     VoiceGlow(color: Theme.voiceBlue, level: listener.level)
