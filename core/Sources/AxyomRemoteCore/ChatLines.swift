@@ -9,9 +9,11 @@ public struct ChatLine: Equatable, Sendable, Identifiable {
     public var isStep: Bool = false
     /// The raw thing behind a step (the exact command, path or notice), shown only when opened.
     public var detail: String?
+    /// The change a file-edit step made, shown green/red when opened.
+    public var diff: FileDiff?
 
-    public init(id: String, mine: Bool, text: String, isStep: Bool = false, detail: String? = nil) {
-        self.id = id; self.mine = mine; self.text = text; self.isStep = isStep; self.detail = detail
+    public init(id: String, mine: Bool, text: String, isStep: Bool = false, detail: String? = nil, diff: FileDiff? = nil) {
+        self.id = id; self.mine = mine; self.text = text; self.isStep = isStep; self.detail = detail; self.diff = diff
     }
 }
 
@@ -48,7 +50,7 @@ public enum ChatLines {
             // Tool steps come after the text of the same event (the agent says, then does).
             if includeSteps && !mine, let v = json(item.raw) {
                 for (i, s) in Steps.detailed(v).enumerated() where !(out.last.map { $0.isStep && $0.text == s.text } ?? false) {
-                    out.append(ChatLine(id: "\(item.id)#\(i)", mine: false, text: s.text, isStep: true, detail: s.detail))
+                    out.append(ChatLine(id: "\(item.id)#\(i)", mine: false, text: s.text, isStep: true, detail: s.detail, diff: s.diff))
                 }
             }
         }

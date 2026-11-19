@@ -552,6 +552,15 @@ struct SessionView: View {
                     Text(steps.count == 1 ? steps[0].text : "\(steps.count) passos · \(steps.last?.text ?? "")")
                         .font(.footnote).foregroundStyle(Theme.muted).lineLimit(1)
                     Spacer(minLength: 0)
+                    let diffs = steps.compactMap(\.diff)
+                    if steps.count > 1, !diffs.isEmpty {
+                        let added = diffs.reduce(0) { $0 + $1.added }, removed = diffs.reduce(0) { $0 + $1.removed }
+                        HStack(spacing: 4) {
+                            if added > 0 { Text("+\(added)").foregroundStyle(.green) }
+                            if removed > 0 { Text("−\(removed)").foregroundStyle(.red) }
+                        }
+                        .font(.caption.monospacedDigit())
+                    }
                 }
                 .contentShape(Rectangle())
             }
@@ -561,7 +570,9 @@ struct SessionView: View {
                     ForEach(steps) { s in
                         VStack(alignment: .leading, spacing: 3) {
                             if steps.count > 1 { Text(s.text).font(.footnote).foregroundStyle(Theme.textSoft) }
-                            if let d = s.detail, !d.isEmpty {
+                            if let diff = s.diff, !diff.lines.isEmpty {
+                                DiffView(diff: diff)
+                            } else if let d = s.detail, !d.isEmpty {
                                 Text(d).font(.system(.caption2, design: .monospaced)).foregroundStyle(Theme.muted)
                                     .lineLimit(4).textSelection(.enabled)
                             }
