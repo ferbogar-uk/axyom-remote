@@ -36,6 +36,15 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
     public var phase: String?
     public var isPinned: Bool = false
 
+    /// Dot rule, same as the desktop: yellow = needs you (question or permission),
+    /// green = still working, blue = finished with something you haven't read. No dot otherwise.
+    public enum Dot: Equatable { case needsYou, working, done }
+    public var dot: Dot? {
+        if hasPendingPrompt { return .needsYou }
+        if isExecuting { return .working }
+        return isUnread ? .done : nil
+    }
+
     /// New messages since anyone last read it (and not waiting on you, which shows its own way).
     public var isUnread: Bool {
         guard let msg = lastMessageAt else { return false }

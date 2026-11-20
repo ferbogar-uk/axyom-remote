@@ -211,7 +211,7 @@ struct ComandoView: View {
                 Text("\(s.projectName) · \(ProviderName.display(s.provider))").font(.caption).foregroundStyle(Theme.muted)
             }
             Spacer(minLength: 8)
-            if s.isUnread { Circle().fill(Theme.text).frame(width: 8, height: 8).accessibilityLabel("Não lida") }
+            StatusDot(dot: s.dot)
             Text(trailing).font(.footnote).foregroundStyle(tint)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
@@ -329,8 +329,7 @@ struct ComandoView: View {
                         }
                     }
                     Spacer(minLength: 6)
-                    if s.hasPendingPrompt { Circle().fill(Theme.phase).frame(width: 8, height: 8).accessibilityLabel("À tua espera") }
-                    else if s.isUnread { Circle().fill(Theme.text).frame(width: 8, height: 8).accessibilityLabel("Não lida") }
+                    StatusDot(dot: s.dot)
                 }
                 .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
                 .contentShape(Rectangle())
@@ -403,6 +402,22 @@ struct ComandoView: View {
                 }
             }
             .task(id: sessions.map(\.id).joined()) { await model.loadPendingRequests(sessions) }
+        }
+    }
+}
+
+
+/// Same colours as the desktop sidebar: yellow needs you, green working, blue done and unread.
+struct StatusDot: View {
+    let dot: FleetSession.Dot?
+    var body: some View {
+        if let dot {
+            let (c, label): (Color, String) = switch dot {
+                case .needsYou: (Theme.phase, "Precisa de ti")
+                case .working: (Theme.green, "A trabalhar")
+                case .done: (Theme.blue, "Terminou, por ler")
+            }
+            Circle().fill(c).frame(width: 9, height: 9).accessibilityLabel(label)
         }
     }
 }
