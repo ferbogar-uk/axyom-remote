@@ -441,3 +441,16 @@ finished), at most one push per 15 s per session:
 
 **Done when:** with the app closed, the island switches to amber "À tua espera" within a
 few seconds of the agent asking a question on the PC.
+
+Status: done on the server (20 Nov 2026, axyom-sync f513814, deployed). Notes for the phone:
+- Reply `{ "type": "activityTokenRegistered", "sessionId", "deviceId", "phase", "pushConfigured" }`;
+  bad input gets `error` / `bad_message`. `endActivityToken` has no reply.
+- The APNs host follows the phone's `registerPushToken` environment (optional `environment`
+  field accepted too), with the same retry on the other host.
+- The phase at registration counts as already shown: register right after starting the activity
+  with the state you put in it.
+- Phase: `hasPendingPrompt` -> waiting, else `isExecuting` -> working, else done (end).
+  `waitingCount` = sessions in the room waiting, at push time. `since` in seconds.
+- A change inside 15 s is held and sent when the window ends (a flip back sends nothing).
+- Not tested end to end yet: needs the phone build with the Live Activity. Full spec in
+  axyom-backend sync/PROTOCOL.md, "Live Activity (Dynamic Island), request #14".
