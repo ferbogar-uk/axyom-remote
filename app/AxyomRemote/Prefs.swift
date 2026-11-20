@@ -16,6 +16,7 @@ enum Prefs {
         static let notifyFinished = "notifyFinished"
         static let notifyLimit = "notifyLimit"
         static let faceID = "faceID"
+        static let liveActivity = "liveActivity"
         static let quickReplies = "quickReplies"
     }
 
@@ -38,6 +39,7 @@ enum Prefs {
     static var haptics: Bool { d.object(forKey: Key.haptics) as? Bool ?? true }
     static var notifications: Bool { d.object(forKey: Key.notifications) as? Bool ?? true }
     static var notifyFinished: Bool { d.object(forKey: Key.notifyFinished) as? Bool ?? true }
+    static var liveActivity: Bool { d.object(forKey: Key.liveActivity) as? Bool ?? true }
     static var notifyLimit: Bool { d.object(forKey: Key.notifyLimit) as? Bool ?? true }
     static var faceID: Bool { d.object(forKey: Key.faceID) as? Bool ?? true }
     /// One phrase per line.

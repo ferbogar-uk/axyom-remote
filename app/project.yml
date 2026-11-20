@@ -46,6 +46,7 @@ targets:
       path: AxyomRemote/Info.plist
       properties:
         # axyom:// links from the widget open a session (DeepLink in core).
+        NSSupportsLiveActivities: true
         CFBundleURLTypes:
           - CFBundleURLName: com.axyom.remote
             CFBundleURLSchemes: [axyom]

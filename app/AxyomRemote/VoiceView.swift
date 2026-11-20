@@ -87,6 +87,7 @@ struct VoiceView: View {
         case .reply(let prompt):
             actionCard(title: "Responder", detail: prompt, confirm: "Confirmar e enviar") { s in { client in
                 try await client.sendPrompt(sessionId: s.id, text: prompt, source: "voice", targetDeviceId: s.hostDeviceId ?? model.desktopId(forEncryptedProjectId: s.encryptedProjectId))
+                model.sessionPrompted(s.id)
                 return "Resposta enviada para \"\(s.title)\"."
             } }
         case .approve:

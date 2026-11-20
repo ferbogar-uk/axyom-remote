@@ -74,5 +74,8 @@ struct AxyomWidget: Widget {
 
 @main
 struct AxyomWidgets: WidgetBundle {
-    var body: some Widget { AxyomWidget() }
+    var body: some Widget {
+        AxyomWidget()
+        SessionLiveActivity()
+    }
 }

@@ -40,6 +40,7 @@ struct SettingsView: View {
     }
     @AppStorage(Prefs.Key.haptics) private var haptics = true
     @AppStorage(Prefs.Key.notifyLimit) private var notifyLimit = true
+    @AppStorage(Prefs.Key.liveActivity) private var liveActivity = true
     @AppStorage(Prefs.Key.faceID) private var faceID = true
     @AppStorage(Prefs.Key.quickReplies) private var quickReplies = Prefs.defaultQuickReplies
     @AppStorage(Prefs.Key.notifications) private var notifications = true
@@ -115,6 +116,8 @@ struct SettingsView: View {
                     toggleRow("bell", "Avisar quando um agente espera por ti", isOn: $notifications)
                     toggleRow("checkmark.circle", "Avisar quando um agente termina", isOn: $notifyFinished)
                     toggleRow("gauge.with.dots.needle.67percent", "Avisar quando um plano passa dos 80%", isOn: $notifyLimit)
+                    toggleRow("platter.filled.top.iphone", "Sessão na Dynamic Island", isOn: $liveActivity)
+                        .onChange(of: liveActivity) { _, on in if !on { LiveActivities.shared.endAll() } }
                     toggleRow("faceid", "Pedir Face ID ao abrir", isOn: $faceID)
                     row("iphone.radiowaves.left.and.right", "Avisos com a app fechada", detail: model.pushStatus)
                         .listRowBackground(Theme.surface)

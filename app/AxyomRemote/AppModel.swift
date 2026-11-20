@@ -197,6 +197,7 @@ final class AppModel: ObservableObject {
     func unpair() {
         let old = client
         client = nil
+        LiveActivities.shared.endAll()
         Task { await old?.clearPushToken(); await old?.stop() }
         PairingKeychain.delete()
         cache.clear()
@@ -213,6 +214,7 @@ final class AppModel: ObservableObject {
         snapshot = snap
         sharePushContext(snap.sessions)
         shareWidget(snap)
+        LiveActivities.shared.follow(snap.sessions)
         checkLimits(snap.planUsage)
         for s in attention.update(snap.sessions) { notifyWaiting(s) }
         for s in finishes.update(snap.sessions) { notifyFinished(s) }
@@ -242,6 +244,12 @@ final class AppModel: ObservableObject {
                 UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: key, content: content, trigger: nil))
             }
         }
+    }
+
+    /// A prompt just went to this session from the phone: show it in the Dynamic Island.
+    func sessionPrompted(_ sessionId: String) {
+        guard let s = snapshot.sessions.first(where: { $0.id == sessionId }) else { return }
+        LiveActivities.shared.start(for: s, waitingCount: snapshot.sessions.filter { $0.hasPendingPrompt && !$0.isArchived }.count)
     }
 
     /// The home-screen widget's data, rewritten (and the widget reloaded) only when it changes.
@@ -318,6 +326,7 @@ final class AppModel: ObservableObject {
         )
         let remote = RemoteClient(pairing: payload, crypto: crypto, device: device, factory: URLSessionSyncSocket.factory)
         client = remote
+        LiveActivities.shared.client = remote
         pairing = payload
         Task {
             await remote.setOnChange { [weak self] snap in

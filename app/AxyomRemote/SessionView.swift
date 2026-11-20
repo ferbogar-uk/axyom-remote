@@ -1020,6 +1020,7 @@ struct SessionView: View {
             let wasBusy = busy
             let id = try await client.sendPrompt(sessionId: sessionId, text: trimmed, images: images, options: promptOptions, source: source, targetDeviceId: target)
             Prefs.tap()
+            model.sessionPrompted(sessionId)
             if !images.isEmpty {
                 // Same wording the core uses when an image goes without text.
                 let shown = trimmed.isEmpty ? (images.count == 1 ? "Vê a imagem em anexo." : "Vê as imagens em anexo.") : trimmed

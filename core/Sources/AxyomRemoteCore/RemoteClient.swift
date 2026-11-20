@@ -107,6 +107,16 @@ public actor RemoteClient {
         if let socket = index { try? await socket.send(ClientMessage.registerPushToken(deviceId: device.deviceId, token: token.lowercased(), development: development).encoded()) }
     }
 
+    /// Live Activity push token for one session (request #14). Sent now if connected.
+    public func registerActivityToken(sessionId: String, token: String) async {
+        let dev = pushToken?.development ?? false
+        if let socket = index { try? await socket.send(ClientMessage.registerActivityToken(sessionId: sessionId, token: token.lowercased(), deviceId: device.deviceId, development: dev).encoded()) }
+    }
+
+    public func endActivityToken(sessionId: String) async {
+        if let socket = index { try? await socket.send(ClientMessage.endActivityToken(sessionId: sessionId, deviceId: device.deviceId).encoded()) }
+    }
+
     /// Stop push to this phone (used when unpairing).
     public func clearPushToken() async {
         pushToken = nil

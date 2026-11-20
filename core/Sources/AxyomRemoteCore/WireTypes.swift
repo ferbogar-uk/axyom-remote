@@ -209,6 +209,8 @@ public enum ServerMessage: Equatable, Sendable {
     case error(code: String, message: String, requestId: String?)
     /// Reply to registerPushToken. `pushConfigured` false = the server has no APNs key yet.
     case registerPushTokenResult(deviceId: String, ok: Bool, pushConfigured: Bool)
+    /// Reply to registerActivityToken.
+    case activityTokenRegistered(sessionId: String, phase: String?, pushConfigured: Bool)
     /// A desktop's plan usage (Claude, Codex, ...), encrypted like message content.
     case planUsageBroadcast(deviceId: String, encryptedUsage: String, usageIv: String, updatedAt: Double?)
     /// The agent's reply as it is being written (relay-only, request #11): the
@@ -269,6 +271,10 @@ public enum ServerMessage: Equatable, Sendable {
             struct S: Decodable { struct B: Decodable { let sessionId: String; let encryptedText: String; let iv: String; let seq: Int?; let done: Bool? }; let stream: B }
             let s = try d.decode(S.self, from: data).stream
             return .sessionStream(sessionId: s.sessionId, encryptedText: s.encryptedText, iv: s.iv, seq: s.seq ?? 0, done: s.done ?? false)
+        case "activityTokenRegistered":
+            struct A: Decodable { let sessionId: String; let phase: String?; let pushConfigured: Bool? }
+            let a = try d.decode(A.self, from: data)
+            return .activityTokenRegistered(sessionId: a.sessionId, phase: a.phase, pushConfigured: a.pushConfigured ?? false)
         case "pong": return .pong
         default: return .unhandled(type: type)
         }
@@ -287,6 +293,9 @@ public enum ClientMessage: Equatable, Sendable {
     /// Register this phone's APNs token so the server can push when the app is closed.
     case registerPushToken(deviceId: String, token: String, development: Bool)
     case unregisterPushToken(deviceId: String)
+    /// Live Activity for one session (request #14): the server pushes its state, never text.
+    case registerActivityToken(sessionId: String, token: String, deviceId: String, development: Bool)
+    case endActivityToken(sessionId: String, deviceId: String)
     case ping
 
     public func encoded() throws -> String {
@@ -321,6 +330,13 @@ public enum ClientMessage: Equatable, Sendable {
             object = o
         case .unregisterPushToken(let deviceId):
             object = ["type": .string("unregisterPushToken"), "deviceId": .string(deviceId)]
+        case .registerActivityToken(let sessionId, let token, let deviceId, let development):
+            var o: [String: JSONValue] = ["type": .string("registerActivityToken"), "sessionId": .string(sessionId),
+                                          "token": .string(token), "deviceId": .string(deviceId)]
+            if development { o["environment"] = .string("development") }
+            object = o
+        case .endActivityToken(let sessionId, let deviceId):
+            object = ["type": .string("endActivityToken"), "sessionId": .string(sessionId), "deviceId": .string(deviceId)]
         case .ping:
             object = ["type": .string("ping")]
         }
