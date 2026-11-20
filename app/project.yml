@@ -59,6 +59,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: AXYOM
         INFOPLIST_KEY_NSCameraUsageDescription: "AXYOM uses the camera to read the pairing code shown on your PC and to take photos you send to an agent."
+        INFOPLIST_KEY_NSFaceIDUsageDescription: "AXYOM asks for Face ID when it opens, because it controls your PC."
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "AXYOM listens to your voice commands. Recognition runs on the iPhone."
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "AXYOM turns your spoken commands into text on the iPhone."
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

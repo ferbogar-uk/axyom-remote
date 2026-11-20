@@ -211,11 +211,37 @@ final class AppModel: ObservableObject {
     private func apply(_ snap: RemoteClient.Snapshot) {
         snapshot = snap
         sharePushContext(snap.sessions)
+        checkLimits(snap.planUsage)
         for s in attention.update(snap.sessions) { notifyWaiting(s) }
         for s in finishes.update(snap.sessions) { notifyFinished(s) }
     }
 
     /// Local notification when an agent finishes its turn (same limits as the waiting one).
+    /// A plan window crossed 80 %: one local alert per window and reset.
+    /// Works while the app is open or recently in the background.
+    private func checkLimits(_ usage: [PlanUsage]) {
+        guard Prefs.notifyLimit, let latest = usage.first else { return }
+        let iso = ISO8601DateFormatter()
+        for plan in latest.plans {
+            for w in plan.windows where w.percent >= UsagePace.criticalPercent {
+                let key = "limit|\(plan.id)|\(w.name)|\(w.resetsAt ?? "")"
+                guard !UserDefaults.standard.bool(forKey: key) else { continue }
+                UserDefaults.standard.set(true, forKey: key)
+                let content = UNMutableNotificationContent()
+                content.title = "\(plan.label) a \(Int(w.percent.rounded()))%"
+                let window = UsagePace.duration(of: w.name)?.label ?? w.name
+                var body = "Janela de \(window) quase no limite. O agente pode parar."
+                if let r = w.resetsAt, let d = iso.date(from: r) {
+                    let h = Int(max(0, d.timeIntervalSinceNow) / 3600), m = Int(max(0, d.timeIntervalSinceNow).truncatingRemainder(dividingBy: 3600) / 60)
+                    body += h > 0 ? " Renova em \(h)h \(m)min." : " Renova em \(m)min."
+                }
+                content.body = body
+                content.sound = .default
+                UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: key, content: content, trigger: nil))
+            }
+        }
+    }
+
     /// Session titles for the notification extension, rewritten only when they change.
     private var lastPushContext: PushContent.Context?
     private func sharePushContext(_ sessions: [FleetSession]) {

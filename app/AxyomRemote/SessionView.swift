@@ -327,6 +327,7 @@ struct SessionView: View {
             if let problem = listener.problem { Text(problem).font(.caption).foregroundStyle(Theme.danger).padding(.horizontal, 8) }
             if !online { Text("O PC está offline: a resposta fica guardada e corre quando ele ligar.").font(.caption).foregroundStyle(Theme.muted).padding(.horizontal, 8) }
             queueTray
+            if !conversation && draft.isEmpty && images.isEmpty && !typing { quickReplyRow }
             VStack(alignment: .leading, spacing: 10) {
                 AttachmentTray(images: $images)
                 if listener.listening && !conversation {
@@ -421,6 +422,25 @@ struct SessionView: View {
         .background(shape.fill(Theme.barGlass.opacity(0.9)))
         .overlay(shape.stroke(Color.white.opacity(0.28), lineWidth: 1))
         .shadow(color: Color.black.opacity(0.35), radius: 10, y: 3)
+    }
+
+    /// Phrases from Settings > Respostas rápidas; one tap sends.
+    private var quickReplyRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Prefs.quickReplies, id: \.self) { phrase in
+                    Button { Task { await send(phrase, source: "keyboard") } } label: {
+                        Text(phrase).font(.subheadline).foregroundStyle(Theme.text)
+                            .padding(.horizontal, 14).frame(minHeight: 36)
+                            .background(Theme.barGlass.opacity(0.85), in: Capsule())
+                            .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        .padding(.bottom, 4)
     }
 
     /// Light tap when the app starts listening and when the agent's reply arrives.

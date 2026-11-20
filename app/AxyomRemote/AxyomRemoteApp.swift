@@ -5,11 +5,18 @@ struct AxyomRemoteApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     // Shared so a notification action can use it even when the app starts in the background.
     @StateObject private var model = AppModel.shared
+    @StateObject private var lock = AppLock()
+    @Environment(\.scenePhase) private var phase
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environmentObject(model)
+                .overlay { if lock.locked { LockScreen(lock: lock).transition(.opacity) } }
+                .onChange(of: phase) { _, p in
+                    if p == .background { lock.wentToBackground() }
+                    if p == .active { lock.cameBack() }
+                }
         }
     }
 }
