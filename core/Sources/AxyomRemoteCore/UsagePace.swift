@@ -53,7 +53,9 @@ public enum UsagePace {
         return Reading(percent: percent, mark: mark, status: status, windowLabel: window?.label, resetsAt: resetsAt)
     }
 
-    /// The reading a plan's ring shows: its worst window (ties → the shorter one).
+    /// The reading a plan's ring shows: the shortest window's number and mark
+    /// (like the desktop's sidebar: Claude 49 % = the 5-hour session), coloured by
+    /// the worst of all its windows.
     public static func ring(_ plan: PlanUsage.Plan, now: Date = Date()) -> Reading {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -67,6 +69,8 @@ public enum UsagePace {
         }) else {
             return read(name: plan.label, percent: plan.percent, resetsAt: plan.nextReset, now: now)
         }
-        return worst
+        let shortest = zip(plan.windows, readings).min { (duration(of: $0.0.name)?.total ?? .infinity) < (duration(of: $1.0.name)?.total ?? .infinity) }?.1 ?? worst
+        return Reading(percent: shortest.percent, mark: shortest.mark, status: worst.status,
+                       windowLabel: shortest.windowLabel, resetsAt: shortest.resetsAt)
     }
 }

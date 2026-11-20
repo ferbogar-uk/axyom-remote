@@ -25,3 +25,17 @@ final class UsagePaceTests: XCTestCase {
         XCTAssertNil(UsagePace.read(name: "Mystery", percent: 10, resetsAt: now, now: now).mark)
     }
 }
+
+final class UsageRingTests: XCTestCase {
+    func testRingShowsSessionNumberWithWorstColour() {
+        let now = Date()
+        let iso = ISO8601DateFormatter()
+        let plan = PlanUsage.Plan(id: "claude", label: "Claude", percent: 49, windows: [
+            .init(name: "Session", percent: 49, resetsAt: iso.string(from: now.addingTimeInterval(2.6 * 3600))),
+            .init(name: "Weekly", percent: 31, resetsAt: iso.string(from: now.addingTimeInterval(5 * 86400 + 17 * 3600))),
+        ])
+        let r = UsagePace.ring(plan, now: now)
+        XCTAssertEqual(r.percent, 49)
+        XCTAssertEqual(r.status, .ahead)   // weekly is past its mark
+    }
+}
