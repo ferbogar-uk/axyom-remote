@@ -15,7 +15,7 @@ enum Theme {
     static let textSoft = Color(light: 0x2E3036, dark: 0xCFCFD4)
     static let muted = Color(light: 0x6B6F76, dark: 0x9C9CA4)
     static let green = Color(light: 0x1F9D63, dark: 0x68D6A2)
-    static let danger = Color(light: 0xD23F4B, dark: 0xFF929B)
+    static let danger = Color(light: 0xD40000, dark: 0xFF2800)   // Ferrari red (Rosso Corsa)
 
     /// The orange of the brand, only for send and voice.
     /// Your voice in a conversation (the app's voice is the orange accent).
