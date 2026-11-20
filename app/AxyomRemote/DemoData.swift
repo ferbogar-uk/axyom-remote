@@ -39,8 +39,10 @@ enum DemoData {
             s("demo-grok", "Teste do AXYOM: responde apenas OK", "grok-build", 60 * 26),
             s("demo-cursor", "Teste do AXYOM: Cursor", "cursor-agent", 60 * 50, unread: true),
         ]
-        snap.devices = [DeviceInfo(deviceId: "pc", name: "Home Laptop", type: "desktop", platform: "win32",
-                                   connectedAt: 0, lastActiveAt: now.timeIntervalSince1970 * 1000)]
+        var pc = DeviceInfo(deviceId: "pc", name: "Home Laptop", type: "desktop", platform: "win32",
+                            connectedAt: now.timeIntervalSince1970 * 1000, lastActiveAt: now.timeIntervalSince1970 * 1000, status: "online")
+        pc.isOnline = true
+        snap.devices = [pc]
         let usage = """
         {"desktopName":"Home Laptop","updatedAt":\(now.timeIntervalSince1970 * 1000),
          "plans":[{"id":"claude","label":"Claude","percent":38,"windows":[]},
