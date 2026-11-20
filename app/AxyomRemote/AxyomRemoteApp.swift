@@ -14,6 +14,10 @@ struct AxyomRemoteApp: App {
             RootView()
                 .environmentObject(model)
                 .overlay { if lock.locked { LockScreen(lock: lock).transition(.opacity) } }
+                // Taps on the widget: axyom://session/<id> opens that conversation.
+                .onOpenURL { url in
+                    if case .session(let id)? = DeepLink(url) { model.openRequest = id }
+                }
                 .onChange(of: phase) { _, p in
                     if p == .background { lock.wentToBackground() }
                     if p == .active { lock.cameBack() }

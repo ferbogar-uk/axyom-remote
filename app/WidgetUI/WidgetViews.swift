@@ -119,7 +119,12 @@ struct AxyomWidgetView: View {
         }
     }
 
-    private func row(_ i: WidgetSnapshot.Item) -> some View {
+    /// Medium and large widgets: each session row opens that conversation.
+    @ViewBuilder private func row(_ i: WidgetSnapshot.Item) -> some View {
+        if size == .small { rowContent(i) } else { Link(destination: DeepLink.session(i.id).url) { rowContent(i) } }
+    }
+
+    private func rowContent(_ i: WidgetSnapshot.Item) -> some View {
         HStack(spacing: 7) {
             Circle().fill(WidgetPalette.dot(i.dot) ?? WidgetPalette.track).frame(width: 8, height: 8)
             Text(i.title).font(.caption).foregroundStyle(WidgetPalette.text).lineLimit(1)
@@ -165,7 +170,9 @@ struct AxyomWidgetView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         count(snap.waitingCount, "à tua espera", WidgetPalette.yellow)
                         if let w = firstWaiting {
-                            Text(w.title).font(.caption).foregroundStyle(WidgetPalette.text).lineLimit(1).padding(.leading, 15)
+                            Link(destination: DeepLink.session(w.id).url) {
+                                Text(w.title).font(.caption).foregroundStyle(WidgetPalette.text).lineLimit(1).padding(.leading, 15)
+                            }
                         }
                         count(snap.workingCount, "a trabalhar", WidgetPalette.green)
                     }
@@ -283,4 +290,12 @@ extension WidgetSnapshot {
             Ring(label: "Grok", percent: 63, status: 1, resetsAt: Date().addingTimeInterval(2 * 3600)),
         ],
         updatedAt: Date())
+}
+
+extension WidgetSnapshot {
+    /// Where a tap on the whole widget goes: the session waiting for you, else the newest, else the list.
+    var tapURL: URL {
+        if let id = (items.first { $0.dot == .needsYou } ?? items.first)?.id { return DeepLink.session(id).url }
+        return DeepLink.home.url
+    }
 }

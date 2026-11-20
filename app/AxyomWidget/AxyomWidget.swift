@@ -57,6 +57,7 @@ struct AxyomWidgetEntryView: View {
     var body: some View {
         AxyomWidgetView(snap: entry.snap, look: entry.look, size: size, now: entry.date)
             .containerBackground(for: .widget) { WidgetBackdrop() }
+            .widgetURL(entry.snap.tapURL)
     }
 }
 

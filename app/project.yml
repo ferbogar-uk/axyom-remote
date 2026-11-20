@@ -45,6 +45,10 @@ targets:
     info:
       path: AxyomRemote/Info.plist
       properties:
+        # axyom:// links from the widget open a session (DeepLink in core).
+        CFBundleURLTypes:
+          - CFBundleURLName: com.axyom.remote
+            CFBundleURLSchemes: [axyom]
         # Export compliance answered once by Ricardo (2026-11-18): standard
         # encryption only (AES-GCM / PBKDF2 / TLS), not distributed in France,
         # no documentation required. NO = exempt, so App Store Connect stops
