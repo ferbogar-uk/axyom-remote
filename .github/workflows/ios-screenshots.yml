@@ -56,7 +56,7 @@ jobs:
           mkdir -p shots
           for mode in dark light; do
             xcrun simctl ui "$UDID" appearance $mode
-            for screen in home usage menu session voice settings; do
+            for screen in home usage menu session voice settings widget; do
               xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
               xcrun simctl launch "$UDID" "$BID" -AXYOMDemo -AXYOMScreen $screen
               sleep 6

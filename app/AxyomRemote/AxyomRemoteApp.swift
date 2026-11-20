@@ -1,4 +1,5 @@
 import SwiftUI
+import AxyomRemoteCore
 
 @main
 struct AxyomRemoteApp: App {
@@ -28,7 +29,10 @@ struct RootView: View {
     var body: some View {
         ZStack {
             Theme.background.ignoresSafeArea()
-            if model.pairing == nil {
+            if model.isDemo && DemoData.screen == "widget" {
+                WidgetGallery(snap: WidgetSnapshot.make(sessions: model.snapshot.sessions, usage: model.snapshot.planUsage,
+                                                        pc: model.pcStatus))
+            } else if model.pairing == nil {
                 PairingView()
             } else {
                 ComandoView()
@@ -36,5 +40,30 @@ struct RootView: View {
         }
         .tint(Theme.amber)
         .preferredColorScheme(Prefs.colorScheme(appearance))
+    }
+}
+
+/// Demo only (`-AXYOMScreen widget`): the widget's views at their real sizes, for CI screenshots.
+struct WidgetGallery: View {
+    let snap: WidgetSnapshot
+    private func tile(_ look: WidgetLook, _ size: WidgetSize, _ w: CGFloat, _ h: CGFloat) -> some View {
+        AxyomWidgetView(snap: snap, look: look, size: size)
+            .padding(16).frame(width: w, height: h)
+            .background(Color(UIColor.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                HStack(spacing: 14) { tile(.summary, .small, 170, 170); tile(.sessions, .small, 170, 170) }
+                tile(.summary, .medium, 354, 170)
+                tile(.usage, .medium, 354, 170)
+                HStack(spacing: 14) {
+                    AxyomWidgetView(snap: snap, look: .summary, size: .lockRect).padding(10).frame(width: 220, height: 76)
+                        .background(.gray.opacity(0.25), in: RoundedRectangle(cornerRadius: 16))
+                    AxyomWidgetView(snap: snap, look: .summary, size: .lockCircle).frame(width: 66, height: 66)
+                }
+            }
+            .padding(.top, 60)
+        }
     }
 }

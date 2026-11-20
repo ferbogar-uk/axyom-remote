@@ -27,9 +27,11 @@ targets:
     sources:
       - AxyomRemote
       - Shared
+      - WidgetUI
     dependencies:
       - package: AxyomRemoteCore
       - target: NotificationService
+      - target: AxyomWidget
     # Push notifications (AXYOM sync server sends APNs alerts; App ID has Push on).
     # The keychain group is shared with the notification extension (session titles).
     entitlements:
@@ -95,6 +97,38 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.axyom.remote.NotificationService
         PRODUCT_NAME: NotificationService
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+
+  # Home and lock screen widget: reads what the app saves in the shared keychain item.
+  AxyomWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - AxyomWidget
+      - WidgetUI
+      - Shared
+    dependencies:
+      - package: AxyomRemoteCore
+      - sdk: WidgetKit.framework
+      - sdk: SwiftUI.framework
+    entitlements:
+      path: AxyomWidget/AxyomWidget.entitlements
+      properties:
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.axyom.remote.shared
+    info:
+      path: AxyomWidget/Info.plist
+      properties:
+        CFBundleDisplayName: AXYOM
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.axyom.remote.AxyomWidget
+        PRODUCT_NAME: AxyomWidget
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES

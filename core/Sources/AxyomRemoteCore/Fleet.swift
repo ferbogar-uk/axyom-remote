@@ -38,7 +38,7 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
 
     /// Dot rule, same as the desktop: yellow = needs you (question or permission),
     /// green = still working, blue = finished with something you haven't read. No dot otherwise.
-    public enum Dot: Equatable { case needsYou, working, done }
+    public enum Dot: String, Codable, Equatable, Sendable { case needsYou, working, done }
     public var dot: Dot? {
         if hasPendingPrompt { return .needsYou }
         if isExecuting { return .working }

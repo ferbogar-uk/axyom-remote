@@ -69,6 +69,9 @@ jobs:
           ext="$app/PlugIns/NotificationService.appex"
           test -d "$ext" || { echo "::error::notification extension missing from the archive"; exit 1; }
           sign "$ext" "$GITHUB_WORKSPACE/app/NotificationService/NotificationService.entitlements"
+          wid="$app/PlugIns/AxyomWidget.appex"
+          test -d "$wid" || { echo "::error::widget extension missing from the archive"; exit 1; }
+          sign "$wid" "$GITHUB_WORKSPACE/app/AxyomWidget/AxyomWidget.entitlements"
           sign "$app" "$GITHUB_WORKSPACE/app/AxyomRemote/AxyomRemote.entitlements"
           codesign -d --entitlements :- "$app" 2>/dev/null > "$RUNNER_TEMP/ent.xml"
           grep -q "aps-environment" "$RUNNER_TEMP/ent.xml" || { echo "::error::aps-environment not in the archived app"; exit 1; }

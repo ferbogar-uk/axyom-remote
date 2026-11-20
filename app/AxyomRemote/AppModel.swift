@@ -1,3 +1,4 @@
+import WidgetKit
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -211,6 +212,7 @@ final class AppModel: ObservableObject {
     private func apply(_ snap: RemoteClient.Snapshot) {
         snapshot = snap
         sharePushContext(snap.sessions)
+        shareWidget(snap)
         checkLimits(snap.planUsage)
         for s in attention.update(snap.sessions) { notifyWaiting(s) }
         for s in finishes.update(snap.sessions) { notifyFinished(s) }
@@ -240,6 +242,16 @@ final class AppModel: ObservableObject {
                 UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: key, content: content, trigger: nil))
             }
         }
+    }
+
+    /// The home-screen widget's data, rewritten (and the widget reloaded) only when it changes.
+    private var lastWidget: WidgetSnapshot?
+    private func shareWidget(_ snap: RemoteClient.Snapshot) {
+        let w = WidgetSnapshot.make(sessions: snap.sessions, usage: snap.planUsage, pc: PCStatus.from(devices: snap.devices))
+        guard !(lastWidget.map { $0.sameContent(as: w) } ?? false) else { return }
+        lastWidget = w
+        SharedKeychain.saveWidget(w)
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     /// Session titles for the notification extension, rewritten only when they change.

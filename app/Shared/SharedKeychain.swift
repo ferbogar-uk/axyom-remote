@@ -28,14 +28,33 @@ enum SharedKeychain {
         return "\(team).com.axyom.remote.shared"
     }()
 
-    private static var base: [String: Any]? {
+    private static var base: [String: Any]? { item(account) }
+
+    private static func item(_ account: String) -> [String: Any]? {
         guard let group else { return nil }
         return [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
                 kSecAttrAccount as String: account, kSecAttrAccessGroup as String: group]
     }
 
-    static func save(_ context: PushContent.Context) {
-        guard let base, let data = try? JSONEncoder().encode(context) else { return }
+    static func save(_ context: PushContent.Context) { write(context, to: base) }
+
+    /// What the home-screen widget shows (same shared group, its own item).
+    static func saveWidget(_ snap: WidgetSnapshot) { write(snap, to: item("widget"), unixDates: true) }
+
+    static func loadWidget() -> WidgetSnapshot? {
+        guard var query = item("widget") else { return nil }
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
+        let d = JSONDecoder(); d.dateDecodingStrategy = .secondsSince1970
+        return try? d.decode(WidgetSnapshot.self, from: data)
+    }
+
+    private static func write<T: Encodable>(_ value: T, to base: [String: Any]?, unixDates: Bool = false) {
+        let e = JSONEncoder()
+        if unixDates { e.dateEncodingStrategy = .secondsSince1970 }
+        guard let base, let data = try? e.encode(value) else { return }
         let update = [kSecValueData as String: data] as CFDictionary
         if SecItemUpdate(base as CFDictionary, update) == errSecItemNotFound {
             var add = base
@@ -55,7 +74,6 @@ enum SharedKeychain {
     }
 
     static func clear() {
-        guard let base else { return }
-        SecItemDelete(base as CFDictionary)
+        for b in [base, item("widget")].compactMap({ $0 }) { SecItemDelete(b as CFDictionary) }
     }
 }
