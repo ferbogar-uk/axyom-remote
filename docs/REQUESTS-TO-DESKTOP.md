@@ -242,7 +242,16 @@ code and shows cards for links and PC paths, but two things need the desktop:
    `{ type: "filePreview", path, encryptedImage, iv }`. Nothing is sent unless
    the phone asks, and only for paths the agent itself mentioned.
 
-Status: waiting for the desktop session.
+Status: done on the server and the desktop (desktop commit 5147eac, 19 Nov 2026; in every AXYOM build since then, including the installed 0.84.x). Notes for the phone:
+- Worktree: the decrypted `encryptedClientMetadata` of the index entry carries `worktreeName`,
+  `branch` and `worktreePath`, only for sessions that run in a worktree (absent otherwise).
+- Preview: send sessionControl `messageType: "file_preview"`, `payload: { path }`. The desktop
+  answers in the session room with `{ type: "filePreview", path, encryptedImage, iv }`: a base64 JPEG
+  (longest side 800 px; first page for a PDF) encrypted with the session key like a message.
+- Nothing is sent when the path is outside the session's workspace or worktree (symlinks resolved),
+  was not mentioned by the agent in its last 400 messages, is not an image/PDF, or is too large.
+  Server limit 1.5 MB of ciphertext (axyom-backend sync/PROTOCOL.md, request #9).
+- Tested: desktop unit tests (7 pass) and the server relay. Not tested end to end with the phone yet.
 
 ## 10. Push that says who, what and where
 
