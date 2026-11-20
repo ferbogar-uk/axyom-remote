@@ -104,6 +104,7 @@ struct AxyomWidgetView: View {
             Spacer(minLength: 0)
             Text("Abre a app para ligar ao PC").font(.caption2).foregroundStyle(WidgetPalette.muted).lineLimit(1)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 
     private var updated: some View {
