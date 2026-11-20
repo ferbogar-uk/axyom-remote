@@ -4,8 +4,11 @@ name: iOS screenshots (simulator, demo data)
 # sessions) and takes screenshots of each screen in dark and light mode. The
 # PNGs are uploaded as the "screenshots" artifact. Started by hand:
 #   gh workflow run ios-screenshots.yml --ref <branch>
+# or by pushing any commit to the `shots` branch (works before the file is on main).
 on:
   workflow_dispatch:
+  push:
+    branches: [shots]
 
 jobs:
   shots:
