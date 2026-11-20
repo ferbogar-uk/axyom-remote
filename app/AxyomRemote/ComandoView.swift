@@ -23,13 +23,20 @@ struct ComandoView: View {
             let board = filtered(model.board(project: project))
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
+                    let variant = model.isDemo ? HomeVariant.demo : .current
                     header
-                    statusBanner
-                    NavigationLink(value: "screen:usage") { PlanUsageStrip(usage: model.snapshot.planUsage) }
-                        .buttonStyle(.plain)
-                    projectChips(board)
+                    if variant == .current {
+                        statusBanner
+                        NavigationLink(value: "screen:usage") { PlanUsageStrip(usage: model.snapshot.planUsage) }
+                            .buttonStyle(.plain)
+                    } else if variant == .a {
+                        NavigationLink(value: "screen:usage") { UsageRings(usage: model.snapshot.planUsage) }.buttonStyle(.plain)
+                    }
+                    if variant == .current || board.projects.count > 1 { projectChips(board) }
+                    if variant == .b || variant == .c { variantWaiting(board.waiting, prominent: true) }
                     searchField
-                    if !board.waiting.isEmpty { waitingSection(board.waiting) }
+                    if variant == .a { variantWaiting(board.waiting, prominent: false) }
+                    if variant == .current, !board.waiting.isEmpty { waitingSection(board.waiting) }
                     let sections = treeSections
                     ForEach(sections) { treeSection($0) }
                     if board.waiting.isEmpty && sections.isEmpty { emptyState }
@@ -81,6 +88,9 @@ struct ComandoView: View {
                 }
             }
             Spacer()
+            if model.isDemo && HomeVariant.demo == .b {
+                NavigationLink(value: "screen:usage") { UsagePill(usage: model.snapshot.planUsage) }.buttonStyle(.plain)
+            }
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape").font(.title3).foregroundStyle(Theme.text)
                     .frame(width: 44, height: 44)
@@ -256,6 +266,20 @@ struct ComandoView: View {
         .background(Theme.elevated, in: Capsule())
     }
 
+    @ViewBuilder private func variantWaiting(_ sessions: [FleetSession], prominent: Bool) -> some View {
+        if !sessions.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("À tua espera").plainSection()
+                ForEach(sessions) { s in
+                    NavigationLink(value: s.id) {
+                        WaitingCard(session: s, request: model.isDemo ? "Quer correr: git push origin main" : nil,
+                                    prominent: prominent, onAllow: {})
+                    }.buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
     /// All sessions of the chosen project, nested and grouped by day like the PC.
     private var treeSections: [SessionTree.Section] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -273,7 +297,7 @@ struct ComandoView: View {
 
     private func treeSection(_ section: SessionTree.Section) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(section.title).sectionLabel()
+            if model.isDemo && HomeVariant.demo != .current { Text(section.title).plainSection() } else { Text(section.title).sectionLabel() }
             VStack(spacing: 0) {
                 ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, r in
                     treeRow(r)
