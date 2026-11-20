@@ -219,7 +219,7 @@ Proposal for the server:
 The phone gives up after 8 s and keeps Apple's live text, so a slow or
 missing endpoint never blocks a message.
 
-Status: waiting for the desktop/server session.
+Status: done on the server (axyom-backend 70f8b6a 2026-11-19, deployed; sync/PROTOCOL.md "Speech recognition for the phone (request #8)"). Status updated 20 Nov 2026.
 
 ## 9. Worktree/branch and PC file previews for the iPhone
 
@@ -288,7 +288,7 @@ decrypts extra fields when present. It only runs if the push asks for it.
   - error: the error in plain words
 - Never more than that line (no code, no paths beyond a file name).
 
-Status: waiting for the desktop/server session. Until then the phone shows
+Status: done on the server (axyom-backend 70f8b6a 2026-11-19, PROTOCOL.md "Rich push (request #10)") and the desktop (commit 5147eac, encrypted one-line summary in requestMobilePush), 19 Nov 2026. Earlier note: Until then the phone shows
 the better text only in its own local notifications (app open or just in
 the background).
 
