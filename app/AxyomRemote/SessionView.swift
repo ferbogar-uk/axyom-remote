@@ -216,6 +216,11 @@ struct SessionView: View {
             }
         }
         .task {
+            if model.isDemo {
+                allItems = DemoData.transcript(); loading = false
+                if startTalking { conversation = true; phase = .listening }   // glow without the microphone
+                return
+            }
             if allItems.isEmpty {
                 let cached = model.cache.loadTranscript(sessionId: sessionId)
                 if !cached.isEmpty { allItems = cached; loading = false }

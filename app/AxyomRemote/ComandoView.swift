@@ -63,6 +63,7 @@ struct ComandoView: View {
         .sheet(isPresented: $showNew) { NewSessionSheet(board: model.board()).environmentObject(model) }
         .sheet(isPresented: $showVoice) { VoiceView().environmentObject(model) }
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(model) }
+        .onAppear { if model.isDemo && DemoData.screen == "settings" { showSettings = true } }
     }
 
     private var pcOnline: Bool { model.pcStatus.isOnline }

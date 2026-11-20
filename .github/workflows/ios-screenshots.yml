@@ -1,0 +1,64 @@
+name: iOS screenshots (simulator, demo data)
+
+# Builds the app for the iOS simulator, opens it in demo mode (no PC, example
+# sessions) and takes screenshots of each screen in dark and light mode. The
+# PNGs are uploaded as the "screenshots" artifact. Started by hand:
+#   gh workflow run ios-screenshots.yml --ref <branch>
+on:
+  workflow_dispatch:
+
+jobs:
+  shots:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        working-directory: app
+        run: xcodegen generate
+      - name: Pick and boot a simulator
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)["devices"]
+          best=None
+          for rt,devs in d.items():
+              if "iOS" not in rt: continue
+              for x in devs:
+                  if "iPhone" in x["name"] and "Pro" in x["name"] and "Max" not in x["name"]:
+                      best=(rt,x["udid"],x["name"])
+          print(best[1] if best else "")')
+          test -n "$udid" || { echo "::error::no iPhone Pro simulator"; exit 1; }
+          echo "UDID=$udid" >> "$GITHUB_ENV"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl status_bar "$udid" override --time 9:41 --batteryLevel 100 --cellularBars 4 --wifiBars 3
+      - name: Build for the simulator
+        working-directory: app
+        run: |
+          xcodebuild -project AxyomRemote.xcodeproj -scheme AxyomRemote -configuration Debug \
+            -destination "id=$UDID" -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO build > build.log 2>&1 || { grep -E "error:" build.log; tail -n 40 build.log; exit 1; }
+          app=$(find "$RUNNER_TEMP/dd/Build/Products" -name "AxyomRemote.app" -path "*iphonesimulator*" | head -1)
+          xcrun simctl install "$UDID" "$app"
+          bid=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Info.plist")
+          echo "BID=$bid" >> "$GITHUB_ENV"
+      - name: Take screenshots
+        run: |
+          mkdir -p shots
+          for mode in dark light; do
+            xcrun simctl ui "$UDID" appearance $mode
+            for screen in home session voice settings; do
+              xcrun simctl terminate "$UDID" "$BID" 2>/dev/null || true
+              xcrun simctl launch "$UDID" "$BID" -AXYOMDemo -AXYOMScreen $screen
+              sleep 6
+              xcrun simctl io "$UDID" screenshot "shots/${screen}-${mode}.png"
+            done
+          done
+          ls -la shots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots/*.png

@@ -31,7 +31,21 @@ final class AppModel: ObservableObject {
         bridge.onOpen = { [weak self] id in self?.openRequest = id }
         bridge.onAnswer = { [weak self] id, allow in await self?.answerFromNotification(sessionId: id, allow: allow) }
         if let pending = bridge.pendingOpen { openRequest = pending; bridge.pendingOpen = nil }
+        if DemoData.isOn { startDemo(); return }
         if let saved = PairingKeychain.load() { connect(saved) }
+    }
+
+    /// Screenshots in the simulator: example data, no network.
+    @Published private(set) var isDemo = false
+    private func startDemo() {
+        isDemo = true
+        pairing = DemoData.pairing
+        snapshot = DemoData.snapshot()
+        switch DemoData.screen {
+        case "session": openRequest = DemoData.mainSession
+        case "voice": openRequest = "talk:" + DemoData.mainSession
+        default: break
+        }
     }
 
     /// Push to this phone with the app closed: "a registar", "ativo", "servidor sem chave", "recusado".
