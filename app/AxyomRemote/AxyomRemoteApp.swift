@@ -49,7 +49,7 @@ struct WidgetGallery: View {
     private func tile(_ look: WidgetLook, _ size: WidgetSize, _ w: CGFloat, _ h: CGFloat, empty: Bool = false) -> some View {
         AxyomWidgetView(snap: empty ? .empty : snap, look: look, size: size)
             .padding(16).frame(width: w, height: h)
-            .background(WidgetBackdrop(), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background { WidgetBackdrop().clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous)) }
     }
     var body: some View {
         ScrollView {
