@@ -9,6 +9,9 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         public var title: String
         public var provider: String
         public var dot: FleetSession.Dot?
+        public init(id: String, title: String, provider: String, dot: FleetSession.Dot?) {
+            self.id = id; self.title = title; self.provider = provider; self.dot = dot
+        }
     }
 
     public struct Ring: Codable, Equatable, Sendable {
@@ -17,6 +20,9 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
         /// 0 ok (green), 1 ahead of pace (yellow), 2 critical (red).
         public var status: Int
         public var resetsAt: Date?
+        public init(label: String, percent: Int, status: Int, resetsAt: Date?) {
+            self.label = label; self.percent = percent; self.status = status; self.resetsAt = resetsAt
+        }
     }
 
     public var pcName: String?
@@ -27,6 +33,11 @@ public struct WidgetSnapshot: Codable, Equatable, Sendable {
     public var items: [Item]
     public var rings: [Ring]
     public var updatedAt: Date
+
+    public init(pcName: String?, pcOnline: Bool, waitingCount: Int, workingCount: Int, items: [Item], rings: [Ring], updatedAt: Date) {
+        self.pcName = pcName; self.pcOnline = pcOnline; self.waitingCount = waitingCount; self.workingCount = workingCount
+        self.items = items; self.rings = rings; self.updatedAt = updatedAt
+    }
 
     public static let empty = WidgetSnapshot(pcName: nil, pcOnline: false, waitingCount: 0, workingCount: 0, items: [], rings: [], updatedAt: .distantPast)
 

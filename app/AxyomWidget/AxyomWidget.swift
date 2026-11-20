@@ -28,9 +28,11 @@ struct Entry: TimelineEntry {
 }
 
 struct Provider: AppIntentTimelineProvider {
-    func placeholder(in context: Context) -> Entry { Entry(date: Date(), snap: .empty, look: .summary) }
+    func placeholder(in context: Context) -> Entry { Entry(date: Date(), snap: .sample, look: .summary) }
     func snapshot(for configuration: ViewChoice, in context: Context) async -> Entry {
-        Entry(date: Date(), snap: SharedKeychain.loadWidget() ?? .empty, look: configuration.view.look)
+        // The widget gallery shows an example with real-looking content, not grey bars.
+        let snap = context.isPreview ? .sample : (SharedKeychain.loadWidget() ?? .empty)
+        return Entry(date: Date(), snap: snap, look: configuration.view.look)
     }
     func timeline(for configuration: ViewChoice, in context: Context) async -> Timeline<Entry> {
         // The app reloads the widget whenever its data changes; this refresh only keeps "há X min" and reset times honest.
@@ -54,7 +56,7 @@ struct AxyomWidgetEntryView: View {
     }
     var body: some View {
         AxyomWidgetView(snap: entry.snap, look: entry.look, size: size, now: entry.date)
-            .containerBackground(for: .widget) { WidgetPalette.ground }
+            .containerBackground(for: .widget) { WidgetBackdrop() }
     }
 }
 

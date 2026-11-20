@@ -52,11 +52,7 @@ struct AxyomWidgetView: View {
         case .lockRect: lockRect
         default:
             if snap.updatedAt == .distantPast {
-                VStack(alignment: .leading, spacing: 4) {
-                    header
-                    Spacer()
-                    Text("Abre a app para ligar ao PC.").font(.footnote).foregroundStyle(WidgetPalette.muted)
-                }
+                skeleton
             } else {
                 switch look {
                 case .summary: summary
@@ -69,15 +65,44 @@ struct AxyomWidgetView: View {
 
     // MARK: pieces
 
+    /// The 3D symbol, large, plus the brand wordmark. Never redacted, so the gallery and
+    /// the loading state still show the brand.
+    private var brand: some View {
+        HStack(spacing: 7) {
+            Image("AxyomSymbol").resizable().scaledToFit().frame(height: size == .small ? 24 : 26)
+            Image("AxyomWordmark").renderingMode(.template).resizable().scaledToFit()
+                .frame(height: size == .small ? 10 : 11).foregroundStyle(WidgetPalette.text)
+        }
+        .unredacted()
+    }
+
     private var header: some View {
         HStack(spacing: 6) {
-            Image("AxyomSymbol").resizable().scaledToFit().frame(height: 14)
-            Image("AxyomWordmark").renderingMode(.template).resizable().scaledToFit().frame(height: 8).foregroundStyle(WidgetPalette.text)
+            brand
             Spacer(minLength: 4)
             Circle().fill(snap.pcOnline ? WidgetPalette.green : WidgetPalette.muted).frame(width: 7, height: 7)
             if size != .small {
                 Text(snap.pcOnline ? (snap.pcName ?? "PC") : "PC offline").font(.caption2).foregroundStyle(WidgetPalette.muted).lineLimit(1)
             }
+        }
+    }
+
+    /// Before the app has sent anything: the brand plus steel bars in the shape of the
+    /// real content, and one line saying what to do.
+    private var skeleton: some View {
+        let bar = { (w: CGFloat, h: CGFloat) in
+            RoundedRectangle(cornerRadius: h / 2, style: .continuous).fill(WidgetPalette.track).frame(width: w, height: h)
+        }
+        return VStack(alignment: .leading, spacing: 9) {
+            brand
+            Spacer(minLength: 0)
+            HStack(spacing: 7) { Circle().fill(WidgetPalette.track).frame(width: 9, height: 9); bar(size == .small ? 70 : 120, 10) }
+            HStack(spacing: 7) { Circle().fill(WidgetPalette.track).frame(width: 9, height: 9); bar(size == .small ? 52 : 90, 10) }
+            if size != .small {
+                HStack(spacing: 10) { ForEach(0..<4, id: \.self) { _ in HStack(spacing: 5) { Circle().stroke(WidgetPalette.track, lineWidth: 2.5).frame(width: 16, height: 16); bar(30, 8) } } }
+            }
+            Spacer(minLength: 0)
+            Text("Abre a app para ligar ao PC").font(.caption2).foregroundStyle(WidgetPalette.muted).lineLimit(1)
         }
     }
 
@@ -227,4 +252,34 @@ struct AxyomWidgetView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
+
+
+/// Steel panel with a faint ember glow at the logo's corner, same as the app's home.
+struct WidgetBackdrop: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [WidgetPalette.dyn(0xFFFFFF, 0x15233A), WidgetPalette.dyn(0xEEF2F6, 0x0D1520)], startPoint: .top, endPoint: .bottom)
+            RadialGradient(colors: [Color(red: 1, green: 0.62, blue: 0.24).opacity(0.14), .clear],
+                           center: UnitPoint(x: 0.08, y: 0.0), startRadius: 0, endRadius: 170)
+        }
+    }
+}
+
+extension WidgetSnapshot {
+    /// Example shown in the widget gallery (never your real data).
+    static let sample = WidgetSnapshot(
+        pcName: "PC", pcOnline: true, waitingCount: 1, workingCount: 2,
+        items: [
+            Item(id: "1", title: "Corrigir login no site", provider: "claude", dot: .needsYou),
+            Item(id: "2", title: "Testes da app", provider: "codex", dot: .working),
+            Item(id: "3", title: "Revisão do repositório", provider: "claude", dot: .working),
+            Item(id: "4", title: "Análise de custos", provider: "gemini", dot: .done),
+        ],
+        rings: [
+            Ring(label: "Claude", percent: 42, status: 0, resetsAt: Date().addingTimeInterval(3 * 3600)),
+            Ring(label: "Codex", percent: 18, status: 0, resetsAt: Date().addingTimeInterval(5 * 86_400)),
+            Ring(label: "Grok", percent: 63, status: 1, resetsAt: Date().addingTimeInterval(2 * 3600)),
+        ],
+        updatedAt: Date())
 }
