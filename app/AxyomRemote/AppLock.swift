@@ -39,10 +39,9 @@ struct LockScreen: View {
     @ObservedObject var lock: AppLock
     var body: some View {
         ZStack {
-            Theme.background.ignoresSafeArea()
+            BrandBackdrop()
             VStack(spacing: 18) {
-                Image("AxyomSymbol").resizable().scaledToFit().frame(height: 56).accessibilityHidden(true)
-                Text("AXYOM").font(.title.weight(.semibold)).foregroundStyle(Theme.text)
+                BrandMark(symbol: 56)
                 Button { lock.unlock() } label: {
                     Label("Desbloquear", systemImage: "faceid")
                         .font(.headline).foregroundStyle(Theme.onAccent)

@@ -49,7 +49,7 @@ struct ComandoView: View {
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
-            .background(Theme.background)
+            .background(BrandBackdrop())
         }
         .onChange(of: model.openRequest) { _, id in
             guard let id else { return }
@@ -78,10 +78,7 @@ struct ComandoView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Image("AxyomSymbol").resizable().scaledToFit().frame(height: 34).accessibilityHidden(true)
-                    Text("AXYOM").font(.system(size: 26, weight: .semibold)).foregroundStyle(Theme.text)
-                }
+                BrandMark(symbol: 38)
                 HStack(spacing: 6) {
                     Circle().fill(pcOnline ? Theme.green : Theme.muted).frame(width: 8, height: 8)
                     Text(pcLine).font(.footnote).foregroundStyle(Theme.muted)
@@ -92,7 +89,8 @@ struct ComandoView: View {
                 Image(systemName: "plus").font(.title3.weight(.semibold)).foregroundStyle(pcOnline ? Theme.text : Theme.muted)
                     .frame(width: 44, height: 44)
                     .background(Theme.surface, in: Circle())
-                    .overlay(Circle().stroke(Theme.border, lineWidth: 1))
+                    .overlay(Circle().strokeBorder(LinearGradient(colors: [Theme.bevelTop, Theme.bevelBottom], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+                    .shadow(color: Theme.shadow.opacity(Theme.shadowOpacity), radius: 8, x: 0, y: 3)
             }
             .disabled(!pcOnline)
             .accessibilityLabel("Nova sessão")
@@ -100,7 +98,8 @@ struct ComandoView: View {
                 Image(systemName: "gearshape").font(.title3).foregroundStyle(Theme.text)
                     .frame(width: 44, height: 44)
                     .background(Theme.surface, in: Circle())
-                    .overlay(Circle().stroke(Theme.border, lineWidth: 1))
+                    .overlay(Circle().strokeBorder(LinearGradient(colors: [Theme.bevelTop, Theme.bevelBottom], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+                    .shadow(color: Theme.shadow.opacity(Theme.shadowOpacity), radius: 8, x: 0, y: 3)
             }
             .accessibilityLabel("Definições")
         }

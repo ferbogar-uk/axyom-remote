@@ -109,6 +109,8 @@ targets:
       - AxyomWidget
       - WidgetUI
       - Shared
+      - path: AxyomRemote/Assets.xcassets
+        buildPhase: resources
     dependencies:
       - package: AxyomRemoteCore
       - sdk: WidgetKit.framework

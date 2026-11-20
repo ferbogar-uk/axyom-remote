@@ -6,27 +6,38 @@ import UIKit
 /// Orange (`accent`) is kept for the two actions only: send and start voice.
 /// Older token names stay as aliases so every screen picks up the new palette.
 enum Theme {
-    static let background = Color(light: 0xF6F7F8, dark: 0x0B0B0C)
-    static let surface = Color(light: 0xFFFFFF, dark: 0x161618)
-    static let elevated = Color(light: 0xECEEF1, dark: 0x1F1F22)
-    static let border = Color(light: 0xDCDFE3, dark: 0x2A2A2E)
-    static let borderStrong = Color(light: 0xB7BCC3, dark: 0x45454B)
-    static let text = Color(light: 0x141416, dark: 0xECECEE)
-    static let textSoft = Color(light: 0x2E3036, dark: 0xCFCFD4)
-    static let muted = Color(light: 0x6B6F76, dark: 0x9C9CA4)
-    static let green = Color(light: 0x1F9D63, dark: 0x68D6A2)
-    static let danger = Color(light: 0xC8102E, dark: 0xD7263D)   // deep Ferrari-style red, less glaring on black
+    // "Aço e brasa" (Ricardo, 20 Nov 2026): the logo's blued steel for the ground and
+    // cards, its amber glow only for what is live or waiting for you.
+    // Dark: graphite-navy. Light: steel paper with navy ink.
+    static let background = Color(light: 0xEEF1F5, dark: 0x0B0F14)
+    static let surface = Color(light: 0xFFFFFF, dark: 0x111A26)
+    static let elevated = Color(light: 0xE3E8EF, dark: 0x17283D)
+    static let border = Color(light: 0xD3DAE3, dark: 0x1D2B3D)
+    static let borderStrong = Color(light: 0xAEB9C7, dark: 0x2E4560)
+    static let text = Color(light: 0x0F1B2D, dark: 0xE5E7EB)
+    static let textSoft = Color(light: 0x24344A, dark: 0xC9D1DB)
+    static let muted = Color(light: 0x56667B, dark: 0x9AA8BA)
+    static let green = Color(light: 0x1F9D63, dark: 0x5FD49C)
+    static let danger = Color(light: 0xC8102E, dark: 0xE0444F)
 
-    /// The orange of the brand, only for send and voice.
-    /// Your voice in a conversation (the app's voice is the orange accent).
-    static let voiceBlue = Color(light: 0x2F7BFF, dark: 0x4C93FF)
+    /// Steel bevel on cards: a lighter top edge fading into the border, like the logo's facets.
+    static let bevelTop = Color(light: 0xE4E9F0, dark: 0x2D425C)
+    static let bevelBottom = Color(light: 0xC8D1DC, dark: 0x16222F)
+    static let shadow = Color(light: 0x0F1B2D, dark: 0x000000)
+    static let shadowOpacity: Double = 0.07
+
+    /// Your voice in a conversation (the app's voice is the amber accent).
+    static let voiceBlue = Color(light: 0x2F6FE0, dark: 0x5B9BFF)
     static let blue = voiceBlue      // "finished, unread" dot, same as the desktop
-    static let accent = Color(hex: 0xFF8A1F)   // brand orange, more saturated (Ricardo, 18 Nov)
-    static let onAccent = Color(hex: 0x0B0B0C)
+    /// The logo's amber glow: send, voice, Permitir, and the waiting hairline.
+    static let accent = Color(light: 0xF08A12, dark: 0xFF9F3D)
+    static let onAccent = Color(hex: 0x10141B)
+    /// Ember tint for the one authored glow behind the logo on the home screen.
+    static let ember = Color(hex: 0xFF9F3D)
 
-    /// Frosted glass tints: graphite band behind the floating bars, grey for the bars.
-    static let graphiteGlass = Color(light: 0xE6E9ED, dark: 0x16171A)
-    static let barGlass = Color(light: 0xFFFFFF, dark: 0x55565C)   // lighter grey glass, like the Claude composer
+    /// Frosted glass tints: steel band behind the floating bars, blued grey for the bars.
+    static let graphiteGlass = Color(light: 0xE3E8EF, dark: 0x0E1520)
+    static let barGlass = Color(light: 0xFFFFFF, dark: 0x34465E)
 
     // Aliases from the first (amber-heavy) design, now neutral.
     static let amber = text
@@ -45,7 +56,8 @@ enum Theme {
     static let amberLight = text
     static let amberSurface = surface
     static let amberFill = elevated
-    static let amberBorder = border
+    /// Amber hairline round anything waiting for you.
+    static let amberBorder = Color(light: 0xF3B66A, dark: 0x7A4D1C)
     static let onAmber = background
 }
 
@@ -100,12 +112,61 @@ extension View {
     func card(fill: Color = Theme.surface, stroke: Color = Theme.border) -> some View {
         padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(fill, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(stroke, lineWidth: 1))
+            .steelSurface(fill: fill, stroke: stroke, radius: 18)
+    }
+
+    /// Blued-steel panel: fill, a bevelled edge (lighter on top, like the logo's facets)
+    /// and a soft, offset shadow. A custom stroke (amber for waiting) replaces the bevel.
+    func steelSurface(fill: Color = Theme.surface, stroke: Color = Theme.border, radius: CGFloat = 18) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        let bevel = stroke == Theme.border
+        return background(fill, in: shape)
+            .overlay {
+                if bevel {
+                    shape.strokeBorder(LinearGradient(colors: [Theme.bevelTop, Theme.bevelBottom], startPoint: .top, endPoint: .bottom), lineWidth: 1)
+                } else {
+                    shape.strokeBorder(stroke, lineWidth: 1)
+                }
+            }
+            .shadow(color: Theme.shadow.opacity(Theme.shadowOpacity), radius: 10, x: 0, y: 4)
     }
 
     func sectionLabel(_ color: Color = Theme.muted) -> some View {
         // Sentence case, no spaced capitals (design review 20 Nov 2026).
         font(.subheadline.weight(.semibold)).foregroundStyle(color == Theme.muted ? Theme.textSoft : color)
+    }
+}
+
+/// The AXYOM lockup: the dimensional symbol plus the brand wordmark, drawn as a
+/// template so it reads navy on light and steel-white on dark.
+struct BrandMark: View {
+    var symbol: CGFloat = 38
+    var body: some View {
+        HStack(spacing: symbol * 0.26) {
+            Image("AxyomSymbol").resizable().scaledToFit().frame(height: symbol)
+            Image("AxyomWordmark").renderingMode(.template).resizable().scaledToFit()
+                .frame(height: symbol * 0.42).foregroundStyle(Theme.text)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("AXYOM")
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// The home screen's one authored moment: a faint ember glow behind the logo, as if
+/// the symbol's amber edge lit the steel. Static, sits under everything, no motion.
+struct BrandBackdrop: View {
+    @Environment(\.colorScheme) private var scheme
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Theme.background
+            RadialGradient(colors: [Theme.ember.opacity(scheme == .dark ? 0.16 : 0.10), .clear],
+                           center: UnitPoint(x: 0.12, y: 0.02), startRadius: 0, endRadius: 320)
+            if scheme == .dark {
+                LinearGradient(colors: [Color(hex: 0x0F1B2D).opacity(0.9), .clear], startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.35))
+            }
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 }

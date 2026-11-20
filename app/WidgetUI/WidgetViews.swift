@@ -12,14 +12,15 @@ enum WidgetPalette {
         Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(widgetHex: dark) : UIColor(widgetHex: light) })
     }
     // Same values as the app's Theme.
-    static let text = dyn(0x141414, 0xF2F2F2)
-    static let muted = dyn(0x6B6B70, 0x9A9AA0)
-    static let track = dyn(0xE4E4E8, 0x2C2C30)
+    static let text = dyn(0x0F1B2D, 0xE5E7EB)
+    static let muted = dyn(0x56667B, 0x9AA8BA)
+    static let track = dyn(0xDCE2EA, 0x22344A)
     static let yellow = dyn(0xA86B12, 0xF2C14E)
     static let green = dyn(0x1F9D63, 0x68D6A2)
     static let blue = dyn(0x2F7BFF, 0x4C93FF)
     static let red = dyn(0xC8102E, 0xD7263D)
-    static let accent = Color(red: 1, green: 0.55, blue: 0.13)
+    static let accent = dyn(0xF08A12, 0xFF9F3D)
+    static let ground = dyn(0xFFFFFF, 0x111A26)
 
     static func dot(_ d: FleetSession.Dot?) -> Color? {
         switch d {
@@ -70,7 +71,8 @@ struct AxyomWidgetView: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            Text("AXYOM").font(.caption.weight(.heavy)).foregroundStyle(WidgetPalette.text)
+            Image("AxyomSymbol").resizable().scaledToFit().frame(height: 14)
+            Image("AxyomWordmark").renderingMode(.template).resizable().scaledToFit().frame(height: 8).foregroundStyle(WidgetPalette.text)
             Spacer(minLength: 4)
             Circle().fill(snap.pcOnline ? WidgetPalette.green : WidgetPalette.muted).frame(width: 7, height: 7)
             if size != .small {
