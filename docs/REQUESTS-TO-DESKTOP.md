@@ -401,3 +401,13 @@ skip the echoed `user_message` item when it writes Codex output rows, the PC
 transcript gets cleaner too.
 
 **Done when:** "what's your name?" from the phone gets "AXYOM" on Codex and Claude sessions.
+
+Status: done on the desktop (release29, backup branch axyom-redesign-backup). One
+`AXYOM_IDENTITY` line (the wording above) is now in every system prompt the
+desktop builds: Claude Code, Codex, OpenCode, Copilot, headless CLIs, the
+Orchestrator, chat providers and Antigravity; the old "be truthful about which
+model you are" line is gone, and a display name is given as "the underlying
+model is X". Codex: the echoed `userMessage` item (`item/completed`) is no
+longer stored as an output row, so new turns have no echo to hide. Not yet
+tested from the phone. A Codex thread started before release29 may keep its
+old instructions; a new session gets the new line.
