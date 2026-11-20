@@ -411,3 +411,33 @@ model is X". Codex: the echoed `userMessage` item (`item/completed`) is no
 longer stored as an output row, so new turns have no echo to hide. Not yet
 tested from the phone. A Codex thread started before release29 may keep its
 old instructions; a new session gets the new line.
+
+## 14. Live Activity updates over APNs (Dynamic Island)
+
+**Why:** the phone will show a running session in the Dynamic Island and on the lock
+screen. iOS only keeps it fresh when the app is closed if the server sends
+`liveactivity` pushes.
+
+**Privacy first:** a Live Activity's content is drawn by iOS itself, so it cannot be
+decrypted on the phone. The phone puts the session title in the activity when it
+starts it (locally). The server pushes **no text**, only state.
+
+**Phone → server** (new message, same socket as `registerPushToken`):
+```json
+{ "type": "registerActivityToken", "sessionId": "<id>", "token": "<hex>", "deviceId": "<id>" }
+{ "type": "endActivityToken", "sessionId": "<id>", "deviceId": "<id>" }
+```
+
+**Server → APNs** when that session's index entry changes (executing / pending prompt /
+finished), at most one push per 15 s per session:
+- topic `com.axyom.remote.push-type.liveactivity`, header `apns-push-type: liveactivity`, priority 10 when it starts waiting for Ricardo, else 5
+- payload:
+```json
+{ "aps": { "timestamp": 1763650000, "event": "update",
+  "content-state": { "phase": "working", "since": 1763649000, "waitingCount": 0 } } }
+```
+`phase` is `working`, `waiting` or `done`. On `done` send `"event": "end"` with
+`"dismissal-date"` = now + 15 min, then forget the token.
+
+**Done when:** with the app closed, the island switches to amber "À tua espera" within a
+few seconds of the agent asking a question on the PC.
