@@ -382,3 +382,22 @@ Status: done on the desktop (19 Nov 2026), AXYOM build release21.
   end reads "typing on the phone". Same block for Claude, Codex, Gemini, Grok,
   Cursor and OpenCode.
 - Phone: please send `options.voice: true` for prompts from the voice conversation.
+
+## 13. The agent introduces itself as AXYOM, not "Codex" / "Claude"
+
+**Seen on the phone (20 Nov 2026):** asked "what's your name?", the agent answers
+"I'm Codex." Ricardo wants every agent, whatever the provider, to answer as AXYOM.
+
+**Ask:** in the system prompt the desktop adds to every session (all providers,
+including `openai-codex`), add one line such as:
+
+> You are AXYOM, Ricardo's development assistant. If asked your name or who you
+> are, say you are AXYOM. Do not call yourself Codex, Claude or ChatGPT; you may
+> name the underlying model only if he asks which model is running.
+
+**Also:** Codex echoes the user's message back as an output event before the
+reply. The phone now hides that echo (core `ChatLines`), but if the desktop can
+skip the echoed `user_message` item when it writes Codex output rows, the PC
+transcript gets cleaner too.
+
+**Done when:** "what's your name?" from the phone gets "AXYOM" on Codex and Claude sessions.
