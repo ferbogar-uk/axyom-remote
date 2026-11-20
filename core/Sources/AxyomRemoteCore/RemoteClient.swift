@@ -286,7 +286,8 @@ public actor RemoteClient {
     // MARK: Actions
 
     /// Ask the PC to start a session. Returns the new session id when the desktop answers.
-    public func createSession(projectId: String, provider: String?, model: String? = nil, prompt: String?, targetDeviceId: String?, timeout: Double = 30) async throws -> String {
+    public func createSession(projectId: String, provider: String?, model: String? = nil, prompt: String?, targetDeviceId: String?,
+                              parentSessionId: String? = nil, manager: Bool = false, timeout: Double = 30) async throws -> String {
         guard let socket = index else { throw ClientError.notConnected }
         let requestId = UUID().uuidString
         let project = try crypto.encrypt(projectId)
@@ -296,7 +297,10 @@ public actor RemoteClient {
             encryptedProjectId: project.ciphertext, projectIdIv: project.iv,
             encryptedInitialPrompt: sealedPrompt?.ciphertext, initialPromptIv: sealedPrompt?.iv,
             provider: provider, model: model,
-            timestamp: now().timeIntervalSince1970 * 1000
+            timestamp: now().timeIntervalSince1970 * 1000,
+            sessionType: manager ? "workstream" : nil,
+            parentSessionId: parentSessionId,
+            agentRole: manager ? "meta-agent" : nil
         )
         try await socket.send(ClientMessage.createSessionRequest(request, targetDeviceId: targetDeviceId).encoded())
         let sleep = self.sleep

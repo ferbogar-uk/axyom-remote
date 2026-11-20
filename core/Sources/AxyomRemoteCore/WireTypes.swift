@@ -187,6 +187,12 @@ public struct CreateSessionRequest: Codable, Equatable, Sendable {
     public var provider: String?
     public var model: String?
     public var timestamp: Double
+    /// "session" | "workstream" — a manager session groups sub-agents.
+    public var sessionType: String?
+    /// Makes the new session a sub-agent of this one (desktop: mobileCreateRequestHandlers).
+    public var parentSessionId: String?
+    /// "meta-agent" for a manager, "standard" otherwise.
+    public var agentRole: String?
 }
 
 public enum ServerMessage: Equatable, Sendable {
