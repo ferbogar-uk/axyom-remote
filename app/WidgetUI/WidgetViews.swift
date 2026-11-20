@@ -187,7 +187,7 @@ struct AxyomWidgetView: View {
                         Spacer(minLength: 4)
                         Text("\(r.percent)%").font(.caption.weight(.semibold).monospacedDigit()).foregroundStyle(WidgetPalette.ring(r.status))
                         if size != .small, let t = WidgetSnapshot.resetText(r.resetsAt, now: now) {
-                            Text(t).font(.caption2).foregroundStyle(WidgetPalette.muted).lineLimit(1).frame(width: 96, alignment: .trailing)
+                            Text(t).font(.caption2).foregroundStyle(WidgetPalette.muted).lineLimit(1).fixedSize()
                         }
                     }
                 }
