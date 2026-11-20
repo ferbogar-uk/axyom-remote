@@ -31,6 +31,16 @@ enum Theme {
     static let amber = text
     /// Kanban phase tags, yellow like on the PC.
     static let phase = Color(light: 0xA86B12, dark: 0xF2C14E)
+    /// Dot colour per kanban phase (text stays grey).
+    static func phaseDot(_ label: String) -> Color {
+        switch label {
+        case "Planeamento": return Color(light: 0x2F7BFF, dark: 0x6AA6FF)
+        case "A implementar": return phase
+        case "A validar": return Color(light: 0x8A4FD6, dark: 0xB58CFF)
+        case "Concluído": return green
+        default: return Color(light: 0x8A8F98, dark: 0x8A8F98)
+        }
+    }
     static let amberLight = text
     static let amberSurface = surface
     static let amberFill = elevated
@@ -94,6 +104,7 @@ extension View {
     }
 
     func sectionLabel(_ color: Color = Theme.muted) -> some View {
-        font(.footnote.weight(.semibold)).textCase(.uppercase).tracking(0.6).foregroundStyle(color)
+        // Sentence case, no spaced capitals (design review 20 Nov 2026).
+        font(.subheadline.weight(.semibold)).foregroundStyle(color == Theme.muted ? Theme.textSoft : color)
     }
 }

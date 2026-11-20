@@ -43,11 +43,16 @@ enum DemoData {
                             connectedAt: now.timeIntervalSince1970 * 1000, lastActiveAt: now.timeIntervalSince1970 * 1000, status: "online")
         pc.isOnline = true
         snap.devices = [pc]
+        let iso = ISO8601DateFormatter()
+        func reset(_ s: TimeInterval) -> String { iso.string(from: now.addingTimeInterval(s)) }
         let usage = """
         {"desktopName":"Home Laptop","updatedAt":\(now.timeIntervalSince1970 * 1000),
-         "plans":[{"id":"claude","label":"Claude","percent":38,"windows":[]},
-                  {"id":"codex","label":"Codex","percent":59,"windows":[]},
-                  {"id":"grok","label":"Grok","percent":1,"windows":[]},
+         "plans":[{"id":"claude","label":"Claude","percent":49,"windows":[
+                     {"name":"Session","percent":49,"resetsAt":"\(reset(2.6 * 3600))"},
+                     {"name":"Weekly","percent":31,"resetsAt":"\(reset(5 * 86400 + 17 * 3600))"},
+                     {"name":"Fable (Weekly)","percent":0,"resetsAt":"\(reset(5 * 86400 + 17 * 3600))"}]},
+                  {"id":"codex","label":"Codex","percent":4,"windows":[{"name":"Weekly","percent":4,"resetsAt":"\(reset(6 * 86400 + 17 * 3600))"}]},
+                  {"id":"grok","label":"Grok","percent":84,"windows":[{"name":"Session","percent":84,"resetsAt":"\(reset(1.2 * 3600))"}]},
                   {"id":"oc","label":"OC Go","percent":22,"windows":[]}],
          "models":[{"id":"sonnet-5.5","name":"Sonnet 5.5","provider":"claude-code","efforts":["low","medium","high"]}],
          "defaultEffort":"low"}

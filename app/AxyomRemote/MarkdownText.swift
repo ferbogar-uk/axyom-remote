@@ -1,4 +1,6 @@
 import SwiftUI
+import AxyomRemoteCore
+import UIKit
 
 /// Renders the agent's Markdown the way the desktop does, enough for a phone:
 /// headings, bullet and numbered lists, **bold** / *italic* / `code` / links,
@@ -69,6 +71,11 @@ struct MarkdownText: View {
                 }
             }
         }
+        // PC files: tap copies the full path (the phone cannot open PC files until the PC sends them, request #9).
+        .environment(\.openURL, OpenURLAction { url in
+            if let path = Refs.filePath(from: url) { UIPasteboard.general.string = path; Prefs.tap(); return .handled }
+            return .systemAction
+        })
         .textSelection(.enabled)
     }
 
@@ -102,6 +109,7 @@ struct MarkdownText: View {
     }
 
     private func inline(_ s: String) -> AttributedString {
-        (try? AttributedString(markdown: s, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+        let short = Refs.shortenInline(s)
+        return (try? AttributedString(markdown: short, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
     }
 }

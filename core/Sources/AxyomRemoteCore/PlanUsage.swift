@@ -8,6 +8,9 @@ public struct PlanUsage: Codable, Equatable, Sendable {
         public var name: String
         public var percent: Double
         public var resetsAt: String?
+        public init(name: String, percent: Double, resetsAt: String? = nil) {
+            self.name = name; self.percent = percent; self.resetsAt = resetsAt
+        }
     }
     public struct Plan: Codable, Equatable, Sendable, Identifiable {
         public var id: String

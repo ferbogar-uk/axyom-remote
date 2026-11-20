@@ -16,27 +16,21 @@ struct ComandoView: View {
     /// Parents whose sub-agents are folded (like the chevrons on the PC).
     @State private var collapsed: Set<String> = []
 
-    @State private var contentUnderBar = false
+    /// What the new-session sheet starts with (long-press menu fills it).
+    @State private var newPreset: (project: String?, parent: FleetSession?, manager: Bool) = (nil, nil, false)
+    @State private var usagePlan: PlanUsage.Plan?
 
     var body: some View {
         NavigationStack(path: $path) {
             let board = filtered(model.board(project: project))
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    let variant = model.isDemo ? HomeVariant.demo : .current
                     header
-                    if variant == .current {
-                        statusBanner
-                        NavigationLink(value: "screen:usage") { PlanUsageStrip(usage: model.snapshot.planUsage) }
-                            .buttonStyle(.plain)
-                    } else if variant == .a {
-                        NavigationLink(value: "screen:usage") { UsageRings(usage: model.snapshot.planUsage) }.buttonStyle(.plain)
-                    }
-                    if variant == .current || board.projects.count > 1 { projectChips(board) }
-                    if variant == .b || variant == .c { variantWaiting(board.waiting, prominent: true) }
+                    statusBanner
+                    UsageRings(usage: model.snapshot.planUsage) { plan in usagePlan = plan }
+                    if board.projects.count > 1 { projectChips(board) }
                     searchField
-                    if variant == .a { variantWaiting(board.waiting, prominent: false) }
-                    if variant == .current, !board.waiting.isEmpty { waitingSection(board.waiting) }
+                    waitingCards(board.waiting)
                     let sections = treeSections
                     ForEach(sections) { treeSection($0) }
                     if board.waiting.isEmpty && sections.isEmpty { emptyState }
@@ -46,7 +40,6 @@ struct ComandoView: View {
                 .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
-            .contentBehindBar($contentUnderBar)
             .refreshable { try? await model.client?.refreshIndex() }
             .navigationDestination(for: String.self) { id in
                 switch id {
@@ -55,7 +48,6 @@ struct ComandoView: View {
                 default: SessionView(sessionId: id.hasPrefix("talk:") ? String(id.dropFirst(5)) : id, startTalking: id.hasPrefix("talk:"))
                 }
             }
-            .safeAreaInset(edge: .bottom) { bottomBar }
             .toolbar(.hidden, for: .navigationBar)
             .background(Theme.background)
         }
@@ -67,10 +59,18 @@ struct ComandoView: View {
         .onAppear {
             if let id = model.openRequest { path = [id]; model.openRequest = nil }
         }
-        .sheet(isPresented: $showNew) { NewSessionSheet(board: model.board()).environmentObject(model) }
+        .sheet(isPresented: $showNew) {
+            NewSessionSheet(board: model.board(), presetProject: newPreset.project, parent: newPreset.parent, manager: newPreset.manager)
+                .environmentObject(model)
+        }
+        .sheet(item: $usagePlan) { PlanUsageSheet(plan: $0) }
         .sheet(isPresented: $showVoice) { VoiceView().environmentObject(model) }
         .sheet(isPresented: $showSettings) { SettingsView().environmentObject(model) }
-        .onAppear { if model.isDemo && DemoData.screen == "settings" { showSettings = true } }
+        .onAppear {
+            if model.isDemo && DemoData.screen == "settings" { showSettings = true }
+            if model.isDemo && DemoData.screen == "usage" { usagePlan = model.snapshot.planUsage.first?.plans.first }
+            if model.isDemo && DemoData.screen == "menu" { openNew(parent: model.snapshot.sessions.first { $0.id == DemoData.mainSession }) }
+        }
     }
 
     private var pcOnline: Bool { model.pcStatus.isOnline }
@@ -88,9 +88,14 @@ struct ComandoView: View {
                 }
             }
             Spacer()
-            if model.isDemo && HomeVariant.demo == .b {
-                NavigationLink(value: "screen:usage") { UsagePill(usage: model.snapshot.planUsage) }.buttonStyle(.plain)
+            Button { openNew() } label: {
+                Image(systemName: "plus").font(.title3.weight(.semibold)).foregroundStyle(pcOnline ? Theme.text : Theme.muted)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.surface, in: Circle())
+                    .overlay(Circle().stroke(Theme.border, lineWidth: 1))
             }
+            .disabled(!pcOnline)
+            .accessibilityLabel("Nova sessão")
             Button { showSettings = true } label: {
                 Image(systemName: "gearshape").font(.title3).foregroundStyle(Theme.text)
                     .frame(width: 44, height: 44)
@@ -266,20 +271,6 @@ struct ComandoView: View {
         .background(Theme.elevated, in: Capsule())
     }
 
-    @ViewBuilder private func variantWaiting(_ sessions: [FleetSession], prominent: Bool) -> some View {
-        if !sessions.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
-                Text("À tua espera").plainSection()
-                ForEach(sessions) { s in
-                    NavigationLink(value: s.id) {
-                        WaitingCard(session: s, request: model.isDemo ? "Quer correr: git push origin main" : nil,
-                                    prominent: prominent, onAllow: {})
-                    }.buttonStyle(.plain)
-                }
-            }
-        }
-    }
-
     /// All sessions of the chosen project, nested and grouped by day like the PC.
     private var treeSections: [SessionTree.Section] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -297,7 +288,7 @@ struct ComandoView: View {
 
     private func treeSection(_ section: SessionTree.Section) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if model.isDemo && HomeVariant.demo != .current { Text(section.title).plainSection() } else { Text(section.title).sectionLabel() }
+            Text(section.title).sectionLabel()
             VStack(spacing: 0) {
                 ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, r in
                     treeRow(r)
@@ -333,8 +324,8 @@ struct ComandoView: View {
                         HStack(spacing: 6) {
                             Text(s.isExecuting ? "A trabalhar" : RelativeAge.portuguese(from: s.lastActivity))
                                 .font(.caption).foregroundStyle(s.isExecuting ? Theme.green : Theme.muted)
-                            if let role = r.role { tag(role, color: r.depth == 0 ? Theme.accent : Theme.muted) }
-                            if let phase = r.phase { tag(phase, color: Theme.phase) }
+                            if let role = r.role { tag(role, dot: nil) }
+                            if let phase = r.phase { tag(phase, dot: Theme.phaseDot(phase)) }
                         }
                     }
                     Spacer(minLength: 6)
@@ -351,10 +342,14 @@ struct ComandoView: View {
         .padding(.trailing, 14).padding(.vertical, 4)
     }
 
-    private func tag(_ text: String, color: Color) -> some View {
-        Text(text).font(.caption2.weight(.semibold)).foregroundStyle(color)
-            .padding(.horizontal, 7).padding(.vertical, 2)
-            .overlay(Capsule().stroke(color.opacity(0.6), lineWidth: 1))
+    /// Grey label with an optional coloured dot (phase colours stay readable but quiet).
+    private func tag(_ text: String, dot: Color?) -> some View {
+        HStack(spacing: 4) {
+            if let dot { Circle().fill(dot).frame(width: 6, height: 6) }
+            Text(text).font(.caption2.weight(.medium)).foregroundStyle(Theme.muted)
+        }
+        .padding(.horizontal, 7).padding(.vertical, 2)
+        .overlay(Capsule().stroke(Theme.border, lineWidth: 1))
     }
 
     /// Keep only sessions whose title, project or agent match the search.
@@ -371,6 +366,12 @@ struct ComandoView: View {
 
     /// Long-press on a session: archive it on the PC.
     @ViewBuilder private func sessionMenu(_ s: FleetSession) -> some View {
+        if pcOnline {
+            Button { openNew(project: s.projectId) } label: { Label("Nova sessão neste projeto", systemImage: "plus.bubble") }
+            Button { openNew(project: s.projectId, manager: true) } label: { Label("Nova sessão gestora", systemImage: "person.3") }
+            Button { openNew(parent: s) } label: { Label("Novo sub-agente desta sessão", systemImage: "arrow.turn.down.right") }
+            Divider()
+        }
         Button(role: .destructive) {
             guard let client = model.client else { return }
             let target = s.hostDeviceId ?? model.desktopId(forEncryptedProjectId: s.encryptedProjectId)
@@ -381,36 +382,27 @@ struct ComandoView: View {
         .disabled(!pcOnline)
     }
 
-    /// Floating bar like the session composer: neutral "new session", orange voice.
-    private var bottomBar: some View {
-        HStack(spacing: 10) {
-            Button { showNew = true } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "square.and.pencil")
-                    Text("Nova sessão em…")
-                }
-                .font(.headline).foregroundStyle(pcOnline ? Theme.text : Theme.muted)
-                .frame(maxWidth: .infinity, minHeight: 48)
-                .contentShape(Capsule())
-            }
-            .disabled(!pcOnline)
-            Button { talk() } label: {
-                Image(systemName: "waveform").font(.title3.weight(.bold)).foregroundStyle(Theme.onAccent)
-                    .frame(width: 48, height: 48).background(Theme.accent, in: Circle())
-                    .opacity(pcOnline ? 1 : 0.45)
-            }
-            .disabled(!pcOnline)
-            .accessibilityLabel("Conversar por voz")
-            .contextMenu {
-                Button { talk() } label: { Label("Conversar com a sessão", systemImage: "waveform") }
-                Button { showVoice = true } label: { Label("Comandos de voz (nova sessão…)", systemImage: "mic") }
-            }
-        }
-        .padding(10)
-        .glassBar(Capsule())
-            // Dark surround: bar top to screen bottom, a little inside the bar.
-            .background { FrostedBackdrop(active: contentUnderBar) }
-        .padding(.horizontal, 12).padding(.top, 18).padding(.bottom, 6)
+    private func openNew(project: String? = nil, parent: FleetSession? = nil, manager: Bool = false) {
+        newPreset = (project, parent, manager)
+        showNew = true
+    }
 
+    /// "À tua espera": what is asked, and Permitir when it is a single plain permission.
+    @ViewBuilder private func waitingCards(_ sessions: [FleetSession]) -> some View {
+        if !sessions.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("À tua espera").sectionLabel(Theme.text)
+                ForEach(sessions) { s in
+                    let req = model.pendingRequests[s.id]
+                    NavigationLink(value: s.id) {
+                        WaitingCard(session: s, request: req?.text,
+                                    onAllow: req?.canAllow == true ? { Task { await model.allowFromHome(s) } } : nil)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu { sessionMenu(s) }
+                }
+            }
+            .task(id: sessions.map(\.id).joined()) { await model.loadPendingRequests(sessions) }
+        }
     }
 }

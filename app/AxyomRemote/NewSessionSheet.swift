@@ -7,6 +7,12 @@ struct NewSessionSheet: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
     let board: FleetBoard
+    /// Preselected project (long-press on a session).
+    var presetProject: String? = nil
+    /// Sub-agent of this session (its project is fixed).
+    var parent: FleetSession? = nil
+    /// Manager session that groups sub-agents.
+    var manager = false
 
     private static let agents: [VoiceAgent] = [.claude, .codex, .grok, .opencode]
 
@@ -29,7 +35,11 @@ struct NewSessionSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack {
-                Text("Nova sessão no PC").font(.title3.bold()).foregroundStyle(Theme.text)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(parent != nil ? "Novo sub-agente" : manager ? "Nova sessão gestora" : "Nova sessão no PC").font(.title3.bold()).foregroundStyle(Theme.text)
+                    if let parent { Text("de \(parent.title)").font(.footnote).foregroundStyle(Theme.muted).lineLimit(1) }
+                    else if manager { Text("Coordena sub-agentes no mesmo projeto").font(.footnote).foregroundStyle(Theme.muted) }
+                }
                 Spacer()
                 Button("Cancelar") { dismiss() }.foregroundStyle(Theme.muted).frame(minHeight: 44)
             }
@@ -99,7 +109,7 @@ struct NewSessionSheet: View {
         .padding(20)
         .background(Theme.surface)
         .presentationDetents([.large])
-        .onAppear { projectId = projectId ?? board.projects.first?.id }
+        .onAppear { projectId = parent?.projectId ?? presetProject ?? projectId ?? board.projects.first?.id }
     }
 
     private func start() async {
@@ -112,7 +122,9 @@ struct NewSessionSheet: View {
                 provider: agent.providerId,
                 model: modelId,
                 prompt: prompt.trimmingCharacters(in: .whitespacesAndNewlines),
-                targetDeviceId: model.desktopId(forEncryptedProjectId: board.projects.first(where: { $0.id == projectId })?.encryptedId)
+                targetDeviceId: parent?.hostDeviceId ?? model.desktopId(forEncryptedProjectId: board.projects.first(where: { $0.id == projectId })?.encryptedId),
+                parentSessionId: parent?.id,
+                manager: manager
             )
             dismiss()
         } catch RemoteClient.ClientError.timeout {

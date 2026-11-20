@@ -67,4 +67,44 @@ public enum Refs {
         guard !ext.isEmpty else { return nil }
         return Ref(kind: imageExt.contains(ext) ? .pcImage : .file, target: clean)
     }
+
+    /// Replace bare links and PC paths in a reply with short Markdown links:
+    /// "https://github.com/x/y/pull/8" → "[pull/8](…)", "C:\\…\\voz.png" → "[voz.png](axyom-file:…)".
+    /// The cards under the message keep the full address.
+    public static func shortenInline(_ text: String) -> String {
+        var out = text
+        for ref in find(text, limit: 20).reversed() {
+            let label: String
+            let target: String
+            switch ref.kind {
+            case .web, .image:
+                guard let u = URL(string: ref.target) else { continue }
+                let parts = u.path.split(separator: "/").suffix(2)
+                label = parts.isEmpty ? (u.host ?? ref.target) : parts.joined(separator: "/")
+                target = ref.target
+            case .file, .pcImage:
+                label = ref.title
+                target = "axyom-file:" + (ref.target.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")
+            }
+            // Leave links that are already Markdown ("](" before or "](" wrapping) alone.
+            var searchStart = out.startIndex
+            var rebuilt = ""
+            while let r = out.range(of: ref.target, range: searchStart..<out.endIndex) {
+                let before = out[out.startIndex..<r.lowerBound]
+                let inMarkdown = before.hasSuffix("](") || before.hasSuffix("[") || before.hasSuffix("<")
+                rebuilt += out[searchStart..<r.lowerBound]
+                rebuilt += inMarkdown ? String(out[r]) : "[\(label)](\(target))"
+                searchStart = r.upperBound
+            }
+            rebuilt += out[searchStart..<out.endIndex]
+            out = rebuilt
+        }
+        return out
+    }
+
+    /// The PC path inside an `axyom-file:` link.
+    public static func filePath(from url: URL) -> String? {
+        guard url.scheme == "axyom-file" else { return nil }
+        return url.absoluteString.dropFirst("axyom-file:".count).removingPercentEncoding
+    }
 }

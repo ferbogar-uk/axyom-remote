@@ -55,3 +55,14 @@ final class DigestTests: XCTestCase {
         XCTAssertEqual(Refs.find("sem nada aqui"), [])
     }
 }
+
+final class ShortLinkTests: XCTestCase {
+    func testLinksAndPathsBecomeShortMarkdownLinks() {
+        let s = Refs.shortenInline("Vê https://github.com/ferbogar-uk/axyom-remote/pull/8 e C:\\Users\\ricar\\Pictures\\voz.png.")
+        XCTAssertTrue(s.contains("[pull/8](https://github.com/ferbogar-uk/axyom-remote/pull/8)"), s)
+        XCTAssertTrue(s.contains("[voz.png](axyom-file:"), s)
+        let url = URL(string: String(s[s.range(of: "axyom-file:")!.lowerBound...].prefix { $0 != ")" }))!
+        XCTAssertEqual(Refs.filePath(from: url), "C:\\Users\\ricar\\Pictures\\voz.png")
+        XCTAssertEqual(Refs.shortenInline("[site](https://example.com/a)"), "[site](https://example.com/a)")
+    }
+}

@@ -88,6 +88,40 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// What each waiting session asks (home cards), and whether Permitir is safe there.
+    @Published private(set) var pendingRequests: [String: (text: String, canAllow: Bool)] = [:]
+
+    func loadPendingRequests(_ sessions: [FleetSession]) async {
+        if isDemo {
+            for s in sessions { pendingRequests[s.id] = ("Quer correr: git push origin main", true) }
+            return
+        }
+        guard let client else { return }
+        for s in sessions {
+            guard let items = try? await client.loadTranscript(sessionId: s.id) else { continue }
+            pendingRequests[s.id] = Self.describePending(items)
+        }
+    }
+
+    static func describePending(_ items: [TranscriptItem]) -> (text: String, canAllow: Bool) {
+        if let q = PendingPrompts.questions(in: items).last { return ("Pergunta: " + (q.questions.first?.question ?? "responde na app"), false) }
+        if PendingPrompts.plans(in: items).last != nil { return ("Quer aprovação de um plano.", false) }
+        if let c = PendingPrompts.commits(in: items).last { return ("Propõe um commit: " + c.message, false) }
+        let perms = PendingPrompts.permissions(in: items)
+        guard let p = perms.last else { return ("Abre para ver o pedido.", false) }
+        let canAllow: Bool
+        if case .answer = NotificationAnswer.decide(items, allow: true) { canAllow = true } else { canAllow = false }
+        return ((p.isDestructive ? "Pedido destrutivo: " : "Quer correr: ") + NotificationAnswer.describe(p), canAllow)
+    }
+
+    /// Permitir on a home card: same rules as the notification button.
+    func allowFromHome(_ s: FleetSession) async {
+        guard let client, !isDemo else { return }
+        _ = await client.answerFromNotification(sessionId: s.id, allow: true)
+        pendingRequests[s.id] = nil
+        Prefs.tap()
+    }
+
     /// Permitir / Recusar tapped on a notification: answer the single pending
     /// permission, then confirm with a quiet local notification.
     func answerFromNotification(sessionId: String, allow: Bool) async {

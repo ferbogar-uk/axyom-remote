@@ -12,35 +12,149 @@ enum HomeVariant: String {
     }
 }
 
-/// Plan usage in one line of small rings (A).
+/// Plan usage in one line of small rings (home, option A). The colour compares
+/// use with time: green under the mark, amber past it, red from 80 %. The small
+/// tick on each ring is the mark (end of the current hour or day). Tap a ring
+/// for that plan's windows.
 struct UsageRings: View {
     let usage: [PlanUsage]
+    var onTap: (PlanUsage.Plan) -> Void = { _ in }
+
+    static func color(_ s: UsagePace.Status) -> Color {
+        switch s {
+        case .ok: return Theme.green
+        case .ahead: return Theme.phase
+        case .critical: return Theme.danger
+        }
+    }
+
     var body: some View {
         if let latest = usage.first, !latest.plans.isEmpty {
-            HStack(spacing: 14) {
+            HStack(spacing: 0) {
                 ForEach(latest.plans) { p in
-                    HStack(spacing: 6) {
-                        ZStack {
-                            Circle().stroke(Theme.border, lineWidth: 3)
-                            Circle().trim(from: 0, to: min(1, p.percent / 100))
-                                .stroke(p.percent >= 80 ? Theme.danger : Theme.textSoft, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                                .rotationEffect(.degrees(-90))
+                    let r = UsagePace.ring(p)
+                    Button { onTap(p) } label: {
+                        HStack(spacing: 7) {
+                            UsageRing(reading: r, size: 22, line: 3)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(p.label).font(.caption2).foregroundStyle(Theme.muted).lineLimit(1)
+                                Text("\(Int(r.percent.rounded()))%").font(.footnote.monospacedDigit().weight(.semibold)).foregroundStyle(Theme.text)
+                            }
                         }
-                        .frame(width: 18, height: 18)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(p.label).font(.caption2).foregroundStyle(Theme.muted)
-                            Text("\(Int(p.percent.rounded()))%").font(.footnote.monospacedDigit().weight(.semibold)).foregroundStyle(Theme.text)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(p.label): \(Int(r.percent.rounded())) por cento")
+                }
+            }
+            .padding(.horizontal, 12).padding(.vertical, 4)
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Theme.border, lineWidth: 1))
+        }
+    }
+}
+
+/// One ring with its pace tick.
+struct UsageRing: View {
+    let reading: UsagePace.Reading
+    var size: CGFloat = 22
+    var line: CGFloat = 3
+    var body: some View {
+        ZStack {
+            Circle().stroke(Theme.border, lineWidth: line)
+            Circle().trim(from: 0, to: min(1, max(0.02, reading.percent / 100)))
+                .stroke(UsageRings.color(reading.status), style: StrokeStyle(lineWidth: line, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            if let mark = reading.mark, mark < 1 {
+                Capsule().fill(Theme.text)
+                    .frame(width: 1.6, height: line + 4)
+                    .offset(y: -size / 2)
+                    .rotationEffect(.degrees(mark * 360))
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// A plan's windows, like the desktop's usage panel: percentage, bar with the
+/// pace mark, and when it renews.
+struct PlanUsageSheet: View {
+    let plan: PlanUsage.Plan
+    @Environment(\.dismiss) private var dismiss
+
+    private func resetDate(_ w: PlanUsage.Window) -> Date? {
+        guard let s = w.resetsAt else { return nil }
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f.date(from: s) ?? ISO8601DateFormatter().date(from: s)
+    }
+
+    private func renews(_ d: Date?) -> String {
+        guard let d else { return "Renovação desconhecida" }
+        let s = max(0, d.timeIntervalSinceNow)
+        if s < 60 { return "Renova agora" }
+        let days = Int(s / 86_400), hours = Int(s.truncatingRemainder(dividingBy: 86_400) / 3600), mins = Int(s.truncatingRemainder(dividingBy: 3600) / 60)
+        if days > 0 { return "Renova em \(days)d \(hours)h" }
+        if hours > 0 { return "Renova em \(hours)h \(mins)min" }
+        return "Renova em \(mins)min"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                AgentBadge(provider: plan.id)
+                Text("Uso \(plan.label)").font(.title3.weight(.semibold)).foregroundStyle(Theme.text)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(Theme.muted)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Fechar")
+            }
+            .padding(.bottom, 8)
+            let windows = plan.windows.isEmpty ? [PlanUsage.Window(name: plan.label, percent: plan.percent, resetsAt: nil)] : plan.windows
+            ForEach(Array(windows.enumerated()), id: \.offset) { i, w in
+                let r = UsagePace.read(name: w.name, percent: w.percent, resetsAt: resetDate(w))
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(w.name).font(.headline).foregroundStyle(Theme.text)
+                            if let label = r.windowLabel { Text("Janela de \(label)").font(.caption).foregroundStyle(Theme.muted) }
+                        }
+                        Spacer()
+                        VStack(alignment: .trailing, spacing: 0) {
+                            Text("\(Int(r.percent.rounded()))%").font(.title2.monospacedDigit().weight(.semibold)).foregroundStyle(UsageRings.color(r.status))
+                            Text("usado").font(.caption2).foregroundStyle(Theme.muted)
                         }
                     }
+                    GeometryReader { g in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Theme.border)
+                            Capsule().fill(UsageRings.color(r.status)).frame(width: max(4, g.size.width * min(1, r.percent / 100)))
+                            if let mark = r.mark, mark < 1 {
+                                Rectangle().fill(Theme.text).frame(width: 2, height: 12).offset(x: g.size.width * mark - 1)
+                            }
+                        }
+                    }
+                    .frame(height: 8)
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock").font(.caption2)
+                        Text(renews(r.resetsAt)).font(.caption)
+                        Spacer()
+                        if let mark = r.mark {
+                            Text("Ritmo: até \(Int((mark * 100).rounded()))% agora").font(.caption)
+                        }
+                    }
+                    .foregroundStyle(Theme.muted)
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right").font(.caption2.weight(.bold)).foregroundStyle(Theme.muted)
+                .padding(.vertical, 14)
+                if i < windows.count - 1 { Divider().overlay(Theme.border) }
             }
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Uso do plano")
+            Spacer(minLength: 0)
         }
+        .padding(20)
+        .background(Theme.surface)
+        .presentationDetents([.medium, .large])
     }
 }
 
@@ -74,7 +188,7 @@ struct WaitingCard: View {
                     Text("\(ProviderName.display(session.provider)) · \(session.projectName)").font(.caption).foregroundStyle(Theme.muted).lineLimit(1)
                 }
             }
-            Text(request ?? "Pede uma resposta. Abre para ver o pedido.")
+            Text(request ?? "A ler o pedido…")
                 .font(.subheadline).foregroundStyle(Theme.textSoft).lineLimit(2)
             HStack(spacing: 10) {
                 if let onAllow, request != nil {
