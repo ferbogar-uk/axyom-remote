@@ -35,6 +35,11 @@ public struct TranscriptItem: Codable, Equatable, Sendable, Identifiable {
     public var hidden: Bool
     public var raw: String
     public var text: String
+
+    public init(id: String, sequence: Int, createdAt: Date, source: String, direction: String, hidden: Bool, raw: String, text: String) {
+        self.id = id; self.sequence = sequence; self.createdAt = createdAt; self.source = source
+        self.direction = direction; self.hidden = hidden; self.raw = raw; self.text = text
+    }
 }
 
 /// Talks to the owner's sync server for the phone: keeps the session list and
