@@ -7,6 +7,7 @@ import AxyomRemoteCore
 /// tested without an iPhone lives in the core; this only holds state for views.
 @MainActor
 final class AppModel: ObservableObject {
+    static let shared = AppModel()
     @Published private(set) var pairing: PairingPayload?
     @Published private(set) var snapshot = RemoteClient.Snapshot()
     @Published var pairingError: String?
@@ -28,6 +29,7 @@ final class AppModel: ObservableObject {
         let bridge = PushBridge.shared
         bridge.onToken = { [weak self] token in self?.sendPushToken(token) }
         bridge.onOpen = { [weak self] id in self?.openRequest = id }
+        bridge.onAnswer = { [weak self] id, allow in await self?.answerFromNotification(sessionId: id, allow: allow) }
         if let pending = bridge.pendingOpen { openRequest = pending; bridge.pendingOpen = nil }
         if let saved = PairingKeychain.load() { connect(saved) }
     }
@@ -70,6 +72,35 @@ final class AppModel: ObservableObject {
                   (response as? HTTPURLResponse)?.statusCode == 200, !data.isEmpty else { return nil }
             return data
         }
+    }
+
+    /// Permitir / Recusar tapped on a notification: answer the single pending
+    /// permission, then confirm with a quiet local notification.
+    func answerFromNotification(sessionId: String, allow: Bool) async {
+        if client == nil, let saved = PairingKeychain.load() { connect(saved) }
+        guard let client else { return }
+        let outcome = await client.answerFromNotification(sessionId: sessionId, allow: allow)
+        let content = UNMutableNotificationContent()
+        content.threadIdentifier = sessionId
+        content.userInfo = ["sessionId": sessionId]
+        switch outcome {
+        case .answered(let allowed, let what):
+            content.title = allowed ? "Permitido" : "Recusado"
+            content.body = what
+        case .openApp(let reason):
+            content.title = "Abre a app para responder"
+            content.body = reason
+            content.sound = .default
+        case .nothingPending:
+            content.title = "Já não há nada à espera"
+            content.body = "O pedido já foi respondido."
+        case .offline:
+            content.title = "Não consegui responder"
+            content.body = "O PC não respondeu. Abre a app para tentar outra vez."
+            content.sound = .default
+        }
+        try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "answer-\(sessionId)", content: content, trigger: nil))
+        Prefs.tap()
     }
 
     private func sendPushToken(_ token: String) {
@@ -153,6 +184,7 @@ final class AppModel: ObservableObject {
         content.subtitle = text.subtitle
         content.body = text.body
         content.threadIdentifier = s.id
+        if kind == "waiting" { content.categoryIdentifier = PushCategory.waiting }
         return content
     }
 

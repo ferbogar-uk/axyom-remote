@@ -23,6 +23,8 @@ final class NotificationService: UNNotificationServiceExtension {
         content.subtitle = text.subtitle
         content.body = text.body
         if let id = payload["sessionId"], !id.isEmpty { content.threadIdentifier = id }
+        // Permitir / Recusar buttons when the agent is waiting (the app checks it is a single plain permission).
+        if payload["kind"] == "waiting" { content.categoryIdentifier = "AXYOM_WAITING" }
         contentHandler(content)
     }
 
