@@ -57,7 +57,7 @@ enum Theme {
     static let amberSurface = surface
     static let amberFill = elevated
     /// Amber hairline round anything waiting for you.
-    static let amberBorder = Color(light: 0xF3B66A, dark: 0x7A4D1C)
+    static let amberBorder = Color(light: 0xF0A24C, dark: 0xA0631F)
     static let onAmber = background
 }
 

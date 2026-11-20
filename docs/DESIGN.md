@@ -193,3 +193,23 @@ Update (2026-11-18, 17:10), Ricardo's request: frosted glass.
 - The bars themselves are grey frosted glass, mostly opaque, with a faint edge.
 - Orange is now #FF8A1F (more saturated than the brand #FF9F3D), still only on
   send and voice.
+
+## Brand look "Aço e brasa" (2026-11-20, approved by Ricardo)
+
+Light and dark both follow the iPhone setting. Colours come from the logo: blued steel for the ground and panels, the amber edge glow only for what is live or waiting (send, voice, Permitir, waiting hairline).
+
+| Role | Dark | Light |
+|---|---|---|
+| Ground | #0B0F14 (navy wash at the top) | #EEF1F5 steel paper |
+| Panel | #111A26 | #FFFFFF |
+| Raised | #17283D | #E3E8EF |
+| Border / strong | #1D2B3D / #2E4560 | #D3DAE3 / #AEB9C7 |
+| Text / soft / muted | #E5E7EB / #C9D1DB / #9AA8BA | #0F1B2D / #24344A / #56667B |
+| Amber (action) | #FF9F3D, text on it #10141B | #F08A12 |
+| Waiting hairline | #A0631F | #F0A24C |
+
+- Panels are "steel": a bevelled 1 pt edge (lighter on top, like the logo's facets) and a soft offset shadow (`steelSurface` / `.card()` in Theme.swift).
+- Brand mark: the dimensional symbol plus the brand wordmark cut from the lockup, drawn as a template so it is navy on light and steel-white on dark (`BrandMark`). Used on the home header, lock screen, pairing and the widget.
+- One authored moment: a faint ember glow behind the logo on the home and lock screens (`BrandBackdrop`), static.
+- Status colours unchanged: yellow needs you, green working, blue done and unread, red critical.
+- Not yet seen on a device: the wordmark at small sizes in the widget, and the bevel in bright daylight.
