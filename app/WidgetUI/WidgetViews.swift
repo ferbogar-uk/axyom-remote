@@ -9,7 +9,7 @@ enum WidgetSize { case small, medium, large, lockRect, lockCircle, lockInline }
 
 enum WidgetPalette {
     static func dyn(_ light: UInt32, _ dark: UInt32) -> Color {
-        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(hex: dark) : UIColor(hex: light) })
+        Color(UIColor { $0.userInterfaceStyle == .dark ? UIColor(widgetHex: dark) : UIColor(widgetHex: light) })
     }
     // Same values as the app's Theme.
     static let text = dyn(0x141414, 0xF2F2F2)
@@ -33,7 +33,7 @@ enum WidgetPalette {
 }
 
 private extension UIColor {
-    convenience init(hex: UInt32) {
+    convenience init(widgetHex hex: UInt32) {
         self.init(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
     }
 }
