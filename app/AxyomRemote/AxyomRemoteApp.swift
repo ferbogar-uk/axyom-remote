@@ -46,10 +46,10 @@ struct RootView: View {
 /// Demo only (`-AXYOMScreen widget`): the widget's views at their real sizes, for CI screenshots.
 struct WidgetGallery: View {
     let snap: WidgetSnapshot
-    private func tile(_ look: WidgetLook, _ size: WidgetSize, _ w: CGFloat, _ h: CGFloat) -> some View {
-        AxyomWidgetView(snap: snap, look: look, size: size)
+    private func tile(_ look: WidgetLook, _ size: WidgetSize, _ w: CGFloat, _ h: CGFloat, empty: Bool = false) -> some View {
+        AxyomWidgetView(snap: empty ? .empty : snap, look: look, size: size)
             .padding(16).frame(width: w, height: h)
-            .background(Color(UIColor.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(WidgetBackdrop(), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
     var body: some View {
         ScrollView {
@@ -57,6 +57,7 @@ struct WidgetGallery: View {
                 HStack(spacing: 14) { tile(.summary, .small, 170, 170); tile(.sessions, .small, 170, 170) }
                 tile(.summary, .medium, 354, 170)
                 tile(.usage, .medium, 354, 170)
+                tile(.summary, .medium, 354, 170, empty: true)
                 HStack(spacing: 14) {
                     AxyomWidgetView(snap: snap, look: .summary, size: .lockRect).padding(10).frame(width: 220, height: 76)
                         .background(.gray.opacity(0.25), in: RoundedRectangle(cornerRadius: 16))
