@@ -483,13 +483,14 @@ struct SessionView: View {
             case .waiting: "ellipsis"
             case .idle: "waveform"
             }
-            Button(action: tapMain) {
+            Button { if phase != .waiting { tapMain() } } label: {
                 Image(systemName: icon)
                     .font(.body.weight(.bold)).foregroundStyle(Theme.onAccent)
                     .frame(width: 44, height: 44).background(Theme.accent, in: Circle())
-                    .opacity(phase == .waiting ? 0.45 : 1)
+                    // Waiting: same solid orange (a faded orange looked brown), dots animate.
+                    .symbolEffect(.variableColor.iterative, isActive: phase == .waiting)
             }
-            .disabled(phase == .waiting)
+            .buttonStyle(.plain)        // a disabled button is dimmed by iOS and turned the orange brown
             .accessibilityLabel(phase == .listening ? "Enviar já" : phase == .speaking ? "Interromper" : phase == .waiting ? "À espera do agente" : "Falar")
         } else {
             sendButton

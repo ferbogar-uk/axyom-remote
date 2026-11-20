@@ -42,8 +42,12 @@ public enum ChatLines {
             }
             if let text = mine ? userText(item) : agentText(item, provider: provider) {
                 let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Some agents (Codex) report the person's own message back as an output event:
+                // it is not a reply, so drop an agent line equal to the last thing you said.
+                let echo = !mine && out.last(where: { $0.mine }).map { Self.same($0.text, clean) } == true
+                    && !out.reversed().prefix { !$0.mine }.contains { !$0.isStep && !$0.mine }
                 // The same text twice in a row (a final event repeating its stream) is one message.
-                if !clean.isEmpty, !(out.last.map { $0.mine == mine && $0.text == clean && !$0.isStep } ?? false) {
+                if !clean.isEmpty, !echo, !(out.last.map { $0.mine == mine && $0.text == clean && !$0.isStep } ?? false) {
                     out.append(ChatLine(id: item.id, mine: mine, text: clean))
                 }
             }
@@ -55,6 +59,13 @@ public enum ChatLines {
             }
         }
         return out
+    }
+
+    /// Same words, ignoring case, spaces and punctuation.
+    static func same(_ a: String, _ b: String) -> Bool {
+        func norm(_ s: String) -> String { s.lowercased().filter { $0.isLetter || $0.isNumber } }
+        let x = norm(a)
+        return !x.isEmpty && x == norm(b)
     }
 
     static func json(_ raw: String) -> JSONValue? {
