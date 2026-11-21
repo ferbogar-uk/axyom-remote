@@ -217,6 +217,7 @@ public enum ServerMessage: Equatable, Sendable {
     /// whole text so far, encrypted; `done` when that message is complete.
     case sessionStream(sessionId: String, encryptedText: String, iv: String, seq: Int, done: Bool)
     case filePreview(path: String, encryptedImage: String, iv: String)
+    case fileText(path: String, encryptedText: String, iv: String, truncated: Bool)
     case pong
     /// A message type this build does not handle yet (kept so it is visible, not dropped silently).
     case unhandled(type: String)
@@ -280,6 +281,10 @@ public enum ServerMessage: Equatable, Sendable {
             struct F: Decodable { let path: String; let encryptedImage: String; let iv: String }
             let f = try d.decode(F.self, from: data)
             return .filePreview(path: f.path, encryptedImage: f.encryptedImage, iv: f.iv)
+        case "fileText":
+            struct T: Decodable { let path: String; let encryptedText: String; let iv: String; let truncated: Bool? }
+            let t = try d.decode(T.self, from: data)
+            return .fileText(path: t.path, encryptedText: t.encryptedText, iv: t.iv, truncated: t.truncated ?? false)
         case "pong": return .pong
         default: return .unhandled(type: type)
         }

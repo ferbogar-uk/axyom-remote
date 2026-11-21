@@ -15,6 +15,24 @@ public enum FilePreview {
         return nil
     }
 
+    /// The text of a code or text file (request #15): UTF-8, not base64, encrypted like a message.
+    public static func text(encryptedText: String, iv: String, crypto: SyncCrypto) -> String? {
+        guard let plain = try? crypto.decryptData(ciphertext: encryptedText, iv: iv) else { return nil }
+        return String(data: plain, encoding: .utf8)
+    }
+
+    /// Types the PC sends as text (it refuses secrets and binaries on its own).
+    public static func canText(_ path: String) -> Bool {
+        let file = (path.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? path).lowercased()
+        if ["readme", "license", "dockerfile", "makefile", ".gitignore"].contains(file) { return true }
+        let ext = (file as NSString).pathExtension
+        return textExt.contains(ext)
+    }
+
+    static let textExt: Set<String> = ["md", "markdown", "txt", "log", "csv", "ts", "tsx", "js", "jsx", "mjs", "cjs", "json", "yml", "yaml", "toml", "ini",
+                                       "html", "htm", "css", "scss", "svg", "swift", "kt", "java", "py", "go", "rs", "c", "h", "cs", "cpp", "sql",
+                                       "sh", "ps1", "bat", "xml", "rb"]
+
     static func isImage(_ d: Data) -> Bool {
         let b = [UInt8](d.prefix(4))
         if b.count >= 3, b[0] == 0xFF, b[1] == 0xD8 { return true }                 // JPEG

@@ -510,6 +510,16 @@ public actor RemoteClient {
         try await sendControl(sessionId: sessionId, type: "file_preview", payload: .object(["path": .string(path)]), targetDeviceId: targetDeviceId)
     }
 
+    /// Ask the PC for the text of a code or text file the agent mentioned (request #15).
+    public func requestFileText(sessionId: String, path: String, targetDeviceId: String?) async throws {
+        try await sendControl(sessionId: sessionId, type: "file_text", payload: .object(["path": .string(path)]), targetDeviceId: targetDeviceId)
+    }
+
+    private var fileTextHandler: (@Sendable (String, String, String, Bool) -> Void)?
+    public func setFileTextHandler(_ handler: (@Sendable (_ sessionId: String, _ path: String, _ text: String, _ truncated: Bool) -> Void)?) {
+        fileTextHandler = handler
+    }
+
     private var filePreviewHandler: (@Sendable (String, String, Data) -> Void)?
     public func setFilePreviewHandler(_ handler: (@Sendable (_ sessionId: String, _ path: String, _ jpeg: Data) -> Void)?) {
         filePreviewHandler = handler
@@ -578,6 +588,8 @@ public actor RemoteClient {
                     if let item = Self.decryptRow(m, crypto: crypto) { continuation.yield([item]) }
                 case .filePreview(let path, let enc, let iv):
                     if let jpeg = FilePreview.image(encryptedImage: enc, iv: iv, crypto: crypto) { filePreviewHandler?(sessionId, path, jpeg) }
+                case .fileText(let path, let enc, let iv, let truncated):
+                    if let text = FilePreview.text(encryptedText: enc, iv: iv, crypto: crypto) { fileTextHandler?(sessionId, path, text, truncated) }
                 case .error(let code, let message, _):
                     throw ClientError.refused("\(code): \(message)")
                 default:

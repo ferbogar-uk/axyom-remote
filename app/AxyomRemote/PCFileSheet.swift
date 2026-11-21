@@ -36,13 +36,20 @@ struct PCFileSheet: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Fechar") { dismiss() } } }
         }
         .onAppear {
-            if FilePreview.canPreview(path) { model.requestPreview(sessionId: sessionId, path: path, target: target) }
+            if FilePreview.canPreview(path) || FilePreview.canText(path) { model.requestPreview(sessionId: sessionId, path: path, target: target) }
         }
     }
 
     @ViewBuilder private var content: some View {
-        if !FilePreview.canPreview(path) {
-            note("O PC só envia imagens e PDFs por agora. Os outros ficheiros ainda não se veem no iPhone.", icon: "doc.text")
+        if !FilePreview.canPreview(path), !FilePreview.canText(path) {
+            note("O PC só envia imagens, PDFs e ficheiros de texto ou código. Este tipo não se vê no iPhone.", icon: "doc.text")
+        } else if let file = model.fileTexts[key] {
+            ScrollView([.horizontal, .vertical]) {
+                Text(file.text).font(.system(.caption, design: .monospaced)).foregroundStyle(Theme.text)
+                    .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(10)
+            }
+            .background(Theme.elevated, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            if file.truncated { Text("Ficheiro grande: só o início (200 KB).").font(.caption).foregroundStyle(Theme.muted) }
         } else if let data = model.filePreviews[key], let image = UIImage(data: data) {
             ScrollView([.horizontal, .vertical]) {
                 Image(uiImage: image).resizable().scaledToFit().frame(maxWidth: .infinity)

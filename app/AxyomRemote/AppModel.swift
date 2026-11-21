@@ -23,21 +23,27 @@ final class AppModel: ObservableObject {
     @Published var openFilePath: String?
     @Published private(set) var filePreviews: [String: Data] = [:]
     /// Asked but not answered yet / gave up waiting (the PC refuses silently for paths it does not allow).
+    /// Text of code/text files from the PC (request #15), by the same key.
+    @Published private(set) var fileTexts: [String: (text: String, truncated: Bool)] = [:]
     @Published private(set) var previewWaiting: Set<String> = []
     @Published private(set) var previewFailed: Set<String> = []
     static func previewKey(_ sessionId: String, _ path: String) -> String { sessionId + "|" + FilePreview.normalized(path) }
 
     func requestPreview(sessionId: String, path: String, target: String?) {
         let key = Self.previewKey(sessionId, path)
-        guard let client, filePreviews[key] == nil, !previewWaiting.contains(key) else { return }
+        guard let client, filePreviews[key] == nil, fileTexts[key] == nil, !previewWaiting.contains(key) else { return }
         previewFailed.remove(key)
         previewWaiting.insert(key)
         Task {
             for variant in FilePreview.variants(path) {
-                try? await client.requestFilePreview(sessionId: sessionId, path: variant, targetDeviceId: target)
+                if FilePreview.canText(path) {
+                    try? await client.requestFileText(sessionId: sessionId, path: variant, targetDeviceId: target)
+                } else {
+                    try? await client.requestFilePreview(sessionId: sessionId, path: variant, targetDeviceId: target)
+                }
             }
             try? await Task.sleep(nanoseconds: 15_000_000_000)
-            if filePreviews[key] == nil { previewWaiting.remove(key); previewFailed.insert(key) }
+            if filePreviews[key] == nil, fileTexts[key] == nil { previewWaiting.remove(key); previewFailed.insert(key) }
         }
     }
     /// Last sessions and conversations, kept on the phone for offline viewing.
@@ -362,6 +368,14 @@ final class AppModel: ObservableObject {
                     guard let self else { return }
                     let key = Self.previewKey(sid, path)
                     self.filePreviews[key] = jpeg
+                    self.previewWaiting.remove(key); self.previewFailed.remove(key)
+                }
+            }
+            await remote.setFileTextHandler { [weak self] sid, path, text, truncated in
+                Task { @MainActor in
+                    guard let self else { return }
+                    let key = Self.previewKey(sid, path)
+                    self.fileTexts[key] = (text, truncated)
                     self.previewWaiting.remove(key); self.previewFailed.remove(key)
                 }
             }

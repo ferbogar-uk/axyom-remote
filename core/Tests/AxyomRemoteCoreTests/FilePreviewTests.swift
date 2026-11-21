@@ -53,4 +53,18 @@ final class FilePreviewTests: XCTestCase {
         XCTAssertEqual(FilePreview.variants("/home/r/x.pdf"), ["/home/r/x.pdf"])
         XCTAssertEqual(FilePreview.normalized("C:\\a\\b.pdf"), "C:/a/b.pdf")
     }
+
+    func testFileTextFrameAndDecrypt() throws {
+        let m = try ServerMessage.decode(#"{"type":"fileText","path":"C:\\a\\x.md","encryptedText":"x","iv":"y","truncated":true}"#)
+        XCTAssertEqual(m, .fileText(path: "C:\\a\\x.md", encryptedText: "x", iv: "y", truncated: true))
+        let c = try crypto(); let e = try c.encrypt("# Titulo\nolá")
+        XCTAssertEqual(FilePreview.text(encryptedText: e.ciphertext, iv: e.iv, crypto: c), "# Titulo\nolá")
+    }
+
+    func testWhichFilesAreText() {
+        XCTAssertTrue(FilePreview.canText("/p/src/App.TSX"))
+        XCTAssertTrue(FilePreview.canText(#"C:\p\README"#))
+        XCTAssertFalse(FilePreview.canText("/p/photo.png"))
+        XCTAssertFalse(FilePreview.canText("/p/plan.pdf"))
+    }
 }
