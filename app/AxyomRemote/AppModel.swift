@@ -18,6 +18,24 @@ final class AppModel: ObservableObject {
     @Published var openRequest: String?
 
     private(set) var client: RemoteClient?
+    /// Pictures of PC files the agent mentioned (request #9), by "session|path". This run only.
+    @Published private(set) var filePreviews: [String: Data] = [:]
+    /// Asked but not answered yet / gave up waiting (the PC refuses silently for paths it does not allow).
+    @Published private(set) var previewWaiting: Set<String> = []
+    @Published private(set) var previewFailed: Set<String> = []
+    static func previewKey(_ sessionId: String, _ path: String) -> String { sessionId + "|" + path }
+
+    func requestPreview(sessionId: String, path: String, target: String?) {
+        let key = Self.previewKey(sessionId, path)
+        guard let client, filePreviews[key] == nil, !previewWaiting.contains(key) else { return }
+        previewFailed.remove(key)
+        previewWaiting.insert(key)
+        Task {
+            try? await client.requestFilePreview(sessionId: sessionId, path: path, targetDeviceId: target)
+            try? await Task.sleep(nanoseconds: 15_000_000_000)
+            if filePreviews[key] == nil { previewWaiting.remove(key); previewFailed.insert(key) }
+        }
+    }
     /// Last sessions and conversations, kept on the phone for offline viewing.
     let cache = OfflineCache(directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("axyom-cache", isDirectory: true))
@@ -334,6 +352,14 @@ final class AppModel: ObservableObject {
         Task {
             await remote.setOnChange { [weak self] snap in
                 Task { @MainActor in self?.apply(snap) }
+            }
+            await remote.setFilePreviewHandler { [weak self] sid, path, jpeg in
+                Task { @MainActor in
+                    guard let self else { return }
+                    let key = Self.previewKey(sid, path)
+                    self.filePreviews[key] = jpeg
+                    self.previewWaiting.remove(key); self.previewFailed.remove(key)
+                }
             }
             await remote.useCache(cache)
             await remote.start()

@@ -192,7 +192,13 @@ struct SessionView: View {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
                     if let provider = session?.provider { AgentBadge(provider: provider, size: 22) }
-                    Text(session?.title ?? "Sessão").font(.headline).foregroundStyle(Theme.text).lineLimit(1)
+                    VStack(spacing: 1) {
+                        Text(session?.title ?? "Sessão").font(.headline).foregroundStyle(Theme.text).lineLimit(1)
+                        if let wt = session?.worktreeName {
+                            Label(session?.branch.map { "\(wt) · \($0)" } ?? wt, systemImage: "arrow.triangle.branch")
+                                .font(.caption2).foregroundStyle(Theme.muted).lineLimit(1)
+                        }
+                    }
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -720,7 +726,7 @@ struct SessionView: View {
         if !mine {
             VStack(alignment: .leading, spacing: 10) {
                 MarkdownText(text: item.text)
-                RefCards(refs: Refs.find(item.text))
+                RefCards(refs: Refs.find(item.text), sessionId: sessionId, target: target)
             }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contextMenu { copyButton(item.text) }
