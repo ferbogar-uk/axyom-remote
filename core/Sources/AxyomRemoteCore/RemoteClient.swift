@@ -504,6 +504,17 @@ public actor RemoteClient {
         try await sendControl(sessionId: sessionId, type: "cancel", payload: nil, targetDeviceId: targetDeviceId)
     }
 
+    /// Ask the PC for a small picture of a file the agent mentioned. The answer comes in the
+    /// session room (so the screen showing that session gets it) through `setFilePreviewHandler`.
+    public func requestFilePreview(sessionId: String, path: String, targetDeviceId: String?) async throws {
+        try await sendControl(sessionId: sessionId, type: "file_preview", payload: .object(["path": .string(path)]), targetDeviceId: targetDeviceId)
+    }
+
+    private var filePreviewHandler: (@Sendable (String, String, Data) -> Void)?
+    public func setFilePreviewHandler(_ handler: (@Sendable (_ sessionId: String, _ path: String, _ jpeg: Data) -> Void)?) {
+        filePreviewHandler = handler
+    }
+
     private func sendControl(sessionId: String, type: String, payload: JSONValue?, targetDeviceId: String?) async throws {
         guard let socket = index else { throw ClientError.notConnected }
         let message = ClientMessage.sessionControl(sessionId: sessionId, messageType: type, payload: payload,
@@ -565,6 +576,8 @@ public actor RemoteClient {
                     }
                 case .messageBroadcast(let m):
                     if let item = Self.decryptRow(m, crypto: crypto) { continuation.yield([item]) }
+                case .filePreview(let path, let enc, let iv):
+                    if let jpeg = FilePreview.image(encryptedImage: enc, iv: iv, crypto: crypto) { filePreviewHandler?(sessionId, path, jpeg) }
                 case .error(let code, let message, _):
                     throw ClientError.refused("\(code): \(message)")
                 default:

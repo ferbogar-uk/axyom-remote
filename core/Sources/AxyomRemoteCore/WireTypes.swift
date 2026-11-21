@@ -216,6 +216,7 @@ public enum ServerMessage: Equatable, Sendable {
     /// The agent's reply as it is being written (relay-only, request #11): the
     /// whole text so far, encrypted; `done` when that message is complete.
     case sessionStream(sessionId: String, encryptedText: String, iv: String, seq: Int, done: Bool)
+    case filePreview(path: String, encryptedImage: String, iv: String)
     case pong
     /// A message type this build does not handle yet (kept so it is visible, not dropped silently).
     case unhandled(type: String)
@@ -275,6 +276,10 @@ public enum ServerMessage: Equatable, Sendable {
             struct A: Decodable { let sessionId: String; let phase: String?; let pushConfigured: Bool? }
             let a = try d.decode(A.self, from: data)
             return .activityTokenRegistered(sessionId: a.sessionId, phase: a.phase, pushConfigured: a.pushConfigured ?? false)
+        case "filePreview":
+            struct F: Decodable { let path: String; let encryptedImage: String; let iv: String }
+            let f = try d.decode(F.self, from: data)
+            return .filePreview(path: f.path, encryptedImage: f.encryptedImage, iv: f.iv)
         case "pong": return .pong
         default: return .unhandled(type: type)
         }

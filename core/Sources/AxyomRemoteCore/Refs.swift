@@ -34,7 +34,7 @@ public enum Refs {
         }
     }
 
-    static let imageExt: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "heic"]
+    public static let imageExt: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "heic"]
 
     public static func find(_ text: String, limit: Int = 6) -> [Ref] {
         var out: [Ref] = []

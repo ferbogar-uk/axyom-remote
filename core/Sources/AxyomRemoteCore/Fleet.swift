@@ -35,6 +35,9 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
     /// Kanban phase from the PC: backlog, planning, implementing, validating, complete.
     public var phase: String?
     public var isPinned: Bool = false
+    /// Set only when the session runs in a git worktree (request #9, client metadata).
+    public var worktreeName: String?
+    public var branch: String?
 
     /// Dot rule, same as the desktop: yellow = needs you (question or permission),
     /// green = still working, blue = finished with something you haven't read. No dot otherwise.
@@ -91,6 +94,8 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
         var draft: String?
         var draftAt: Double?
         var phase: String?
+        var worktreeName: String?
+        var branch: String?
         if let meta = entry.encryptedClientMetadata, let iv = entry.clientMetadataIv,
            let json = try? crypto.decrypt(ciphertext: meta, iv: iv),
            let value = try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)) {
@@ -98,6 +103,8 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
             draft = value["draftInput"]?.string
             draftAt = value["draftUpdatedAt"]?.number
             phase = value["phase"]?.string
+            worktreeName = value["worktreeName"]?.string.flatMap { $0.isEmpty ? nil : $0 }
+            branch = value["branch"]?.string.flatMap { $0.isEmpty ? nil : $0 }
         }
         var s = FleetSession(
             id: entry.sessionId,
@@ -125,6 +132,8 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
         s.agentRole = entry.agentRole
         s.sessionType = entry.sessionType
         s.phase = phase
+        s.worktreeName = worktreeName
+        s.branch = branch
         s.isPinned = entry.isPinned ?? false
         return s
     }
