@@ -41,7 +41,7 @@ struct SessionActivityLockView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image("AxyomSymbol").resizable().scaledToFit().frame(width: 34, height: 34)
+            Image("AxyomSymbolSmall").resizable().scaledToFit().frame(width: 34, height: 34)
             VStack(alignment: .leading, spacing: 3) {
                 Text(attributes.title).font(.subheadline.weight(.semibold)).foregroundStyle(WidgetPalette.text).lineLimit(1)
                 HStack(spacing: 6) {

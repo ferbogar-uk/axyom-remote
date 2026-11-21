@@ -14,7 +14,7 @@ struct SessionLiveActivity: Widget {
             let s = context.state
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image("AxyomSymbol").resizable().scaledToFit().frame(width: 30, height: 30).padding(.leading, 4)
+                    Image("AxyomSymbolSmall").resizable().scaledToFit().frame(width: 30, height: 30).padding(.leading, 4)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     Label(SessionActivityLook.label(s), systemImage: SessionActivityLook.icon(s))
@@ -29,7 +29,7 @@ struct SessionLiveActivity: Widget {
                     .padding(.horizontal, 6)
                 }
             } compactLeading: {
-                Image("AxyomSymbol").resizable().scaledToFit().frame(width: 20, height: 20)
+                Image("AxyomSymbolSmall").resizable().scaledToFit().frame(width: 20, height: 20)
             } compactTrailing: {
                 Image(systemName: SessionActivityLook.icon(s)).foregroundStyle(SessionActivityLook.color(s))
             } minimal: {
