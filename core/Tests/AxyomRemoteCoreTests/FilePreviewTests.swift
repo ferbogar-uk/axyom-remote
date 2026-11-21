@@ -47,4 +47,10 @@ final class FilePreviewTests: XCTestCase {
         XCTAssertEqual(s?.worktreeName, "azure-listen")
         XCTAssertEqual(s?.branch, "feat/x")
     }
+
+    func testWindowsPathsAreAskedBothWays() {
+        XCTAssertEqual(FilePreview.variants("C:/Users/r/a b/x.pdf"), ["C:\\Users\\r\\a b\\x.pdf", "C:/Users/r/a b/x.pdf"])
+        XCTAssertEqual(FilePreview.variants("/home/r/x.pdf"), ["/home/r/x.pdf"])
+        XCTAssertEqual(FilePreview.normalized("C:\\a\\b.pdf"), "C:/a/b.pdf")
+    }
 }

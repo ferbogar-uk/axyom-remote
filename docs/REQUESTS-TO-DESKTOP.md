@@ -496,3 +496,18 @@ Status: done on the desktop/server (21 Nov 2026, desktop axyom-redesign-backup e
 
 Ricardo testou o preview de PDF com o AXYOM 0.83.0 no PC e o iPhone não recebeu resposta. O #9 está
 em 0.84.x e seguintes: provavelmente o PC ainda não tinha a funcionalidade. Falta repetir com 0.85.x.
+
+## Para o desktop verificar: file_preview não responde (21 Nov 2026, build 55)
+
+Ricardo toca no nome de `demo.pdf` no iPhone e o PC não envia a pré-visualização. O AXYOM no PC deve ser 0.85.x.
+O iPhone envia agora o pedido duas vezes, com as duas grafias do caminho:
+
+    C:\Users\ricar\PROJECTS\AXYOM - AI Development OS\packages\extensions\pdf-viewer\samples\demo.pdf
+    C:/Users/ricar/PROJECTS/AXYOM - AI Development OS/packages/extensions/pdf-viewer/samples/demo.pdf
+
+O agente tinha escrito na conversa o caminho relativo `packages/extensions/pdf-viewer/samples/demo.pdf` e,
+noutra resposta, o caminho completo com barras invertidas.
+
+Pedir ao desktop: (1) confirmar nos registos se chegou o sessionControl `file_preview` e o que decidiu;
+(2) a regra "mencionado nas últimas 400 mensagens" deve comparar caminhos normalizados (barras, maiúsculas da
+unidade) e aceitar também a menção relativa ao projeto; (3) se recusar, escrever o motivo no registo.

@@ -112,6 +112,12 @@ struct MarkdownText: View {
 
     private func inline(_ s: String) -> AttributedString {
         let short = Refs.shortenInline(s, root: projectRoot)
-        return (try? AttributedString(markdown: short, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
+        guard var out = try? AttributedString(markdown: short, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) else { return AttributedString(s) }
+        // Links read as links, in the brand amber, like the orange file names on the PC.
+        for run in out.runs where run.link != nil {
+            out[run.range].foregroundColor = Theme.accent
+            out[run.range].underlineStyle = .single
+        }
+        return out
     }
 }

@@ -27,4 +27,17 @@ public enum FilePreview {
         let ext = (path as NSString).pathExtension.lowercased()
         return ext == "pdf" || Refs.imageExt.contains(ext)
     }
+
+    /// A Windows path is written both ways in the wild (`C:\a\b` and `C:/a/b`); the PC may compare
+    /// the text exactly, so ask with both. Anything else is asked as it is.
+    public static func variants(_ path: String) -> [String] {
+        let drive = path.count > 1 && path[path.index(after: path.startIndex)] == ":"
+        guard drive else { return [path] }
+        let back = path.replacingOccurrences(of: "/", with: "\\")
+        let slash = path.replacingOccurrences(of: "\\", with: "/")
+        return back == slash ? [back] : [back, slash]
+    }
+
+    /// One key for both spellings, so an answer to either fills the same preview.
+    public static func normalized(_ path: String) -> String { path.replacingOccurrences(of: "\\", with: "/") }
 }

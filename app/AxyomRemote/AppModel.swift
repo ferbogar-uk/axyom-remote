@@ -25,7 +25,7 @@ final class AppModel: ObservableObject {
     /// Asked but not answered yet / gave up waiting (the PC refuses silently for paths it does not allow).
     @Published private(set) var previewWaiting: Set<String> = []
     @Published private(set) var previewFailed: Set<String> = []
-    static func previewKey(_ sessionId: String, _ path: String) -> String { sessionId + "|" + path }
+    static func previewKey(_ sessionId: String, _ path: String) -> String { sessionId + "|" + FilePreview.normalized(path) }
 
     func requestPreview(sessionId: String, path: String, target: String?) {
         let key = Self.previewKey(sessionId, path)
@@ -33,7 +33,9 @@ final class AppModel: ObservableObject {
         previewFailed.remove(key)
         previewWaiting.insert(key)
         Task {
-            try? await client.requestFilePreview(sessionId: sessionId, path: path, targetDeviceId: target)
+            for variant in FilePreview.variants(path) {
+                try? await client.requestFilePreview(sessionId: sessionId, path: variant, targetDeviceId: target)
+            }
             try? await Task.sleep(nanoseconds: 15_000_000_000)
             if filePreviews[key] == nil { previewWaiting.remove(key); previewFailed.insert(key) }
         }
