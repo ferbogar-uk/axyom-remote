@@ -463,3 +463,19 @@ Status: done on the server (20 Nov 2026, axyom-sync f513814, deployed). Notes fo
 - A change inside 15 s is held and sent when the window ends (a flip back sends nothing).
 - Not tested end to end yet: needs the phone build with the Live Activity. Full spec in
   axyom-backend sync/PROTOCOL.md, "Live Activity (Dynamic Island), request #14".
+## 15. Texto de ficheiros de código e texto, para ver no iPhone
+
+Ricardo (21 Nov 2026): quer tocar no nome de um ficheiro na resposta do agente e vê-lo no iPhone.
+Hoje o PC só envia imagem ou PDF (pedido #9); para `.md`, `.ts`, `.json`, `.txt` o iPhone só mostra o caminho.
+
+Proposta, igual ao #9: no sessionControl `messageType: "file_preview"` (ou `"file_text"`), `payload: { path }`.
+O desktop aplica as mesmas regras (dentro do workspace/worktree, mencionado pelo agente nas últimas 400 mensagens)
+e responde na sala da sessão com `{ type: "fileText", path, encryptedText, iv }`: texto UTF-8 cifrado como uma
+mensagem, no máximo ~200 KB (cortar e marcar `truncated: true` se for maior). Ficheiros binários: ignorar.
+
+Estado: por fazer (desktop e servidor: o servidor tem de reencaminhar `fileText` como faz com `filePreview`).
+
+## Nota sobre o #9 (21 Nov 2026)
+
+Ricardo testou o preview de PDF com o AXYOM 0.83.0 no PC e o iPhone não recebeu resposta. O #9 está
+em 0.84.x e seguintes: provavelmente o PC ainda não tinha a funcionalidade. Falta repetir com 0.85.x.
