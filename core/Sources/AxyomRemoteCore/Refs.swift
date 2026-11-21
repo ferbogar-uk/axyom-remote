@@ -72,7 +72,7 @@ public enum Refs {
     /// "https://github.com/x/y/pull/8" → "[pull/8](…)", "C:\\…\\voz.png" → "[voz.png](axyom-file:…)".
     /// The cards under the message keep the full address.
     public static func shortenInline(_ text: String) -> String {
-        var out = text
+        var out = linkPCPaths(in: text)
         for ref in find(text, limit: 20).reversed() {
             let label: String
             let target: String
@@ -99,6 +99,31 @@ public enum Refs {
             rebuilt += out[searchStart..<out.endIndex]
             out = rebuilt
         }
+        return out
+    }
+
+    /// The desktop writes `[demo.pdf](C:\\Users\\x\\demo.pdf)`: a Windows path is not a valid link
+    /// target, so the label showed as plain text. Turn those (and file:// links) into `axyom-file:` links
+    /// so the name in the sentence is tappable, as it is on the PC.
+    static func linkPCPaths(in text: String) -> String {
+        guard let re = try? NSRegularExpression(pattern: #"\[([^\]\n]+)\]\(\s*<?([^)\n]+?)>?\s*\)"#) else { return text }
+        let ns = text as NSString
+        var out = ""
+        var last = 0
+        for m in re.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            let label = ns.substring(with: m.range(at: 1))
+            var target = ns.substring(with: m.range(at: 2)).trimmingCharacters(in: .whitespaces)
+            if target.hasPrefix("file:///") {
+                target = String(target.dropFirst("file:///".count)).removingPercentEncoding ?? target
+                if !target.hasPrefix("/"), !(target.count > 1 && target[target.index(after: target.startIndex)] == ":") { target = "/" + target }
+            }
+            guard let ref = fileRef(target), ref.target == target || ref.target == target.trimmingCharacters(in: CharacterSet(charactersIn: ".,;:!?)")),
+                  target.range(of: #"^([A-Za-z]:[\\/]|/(Users|home|mnt|Volumes)/)"#, options: .regularExpression) != nil else { continue }
+            out += ns.substring(with: NSRange(location: last, length: m.range.location - last))
+            out += "[\(label)](axyom-file:" + (ref.target.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "") + ")"
+            last = m.range.location + m.range.length
+        }
+        out += ns.substring(from: last)
         return out
     }
 

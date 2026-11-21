@@ -19,6 +19,8 @@ final class AppModel: ObservableObject {
 
     private(set) var client: RemoteClient?
     /// Pictures of PC files the agent mentioned (request #9), by "session|path". This run only.
+    /// A file name tapped in a reply: the session screen shows it in a sheet.
+    @Published var openFilePath: String?
     @Published private(set) var filePreviews: [String: Data] = [:]
     /// Asked but not answered yet / gave up waiting (the PC refuses silently for paths it does not allow).
     @Published private(set) var previewWaiting: Set<String> = []

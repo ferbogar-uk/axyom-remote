@@ -71,9 +71,9 @@ struct MarkdownText: View {
                 }
             }
         }
-        // PC files: tap copies the full path (the phone cannot open PC files until the PC sends them, request #9).
+        // PC files: tapping the name opens the viewer (a picture or PDF comes from the PC, request #9).
         .environment(\.openURL, OpenURLAction { url in
-            if let path = Refs.filePath(from: url) { UIPasteboard.general.string = path; Prefs.tap(); return .handled }
+            if let path = Refs.filePath(from: url) { Prefs.tap(); AppModel.shared.openFilePath = path; return .handled }
             return .systemAction
         })
         .textSelection(.enabled)

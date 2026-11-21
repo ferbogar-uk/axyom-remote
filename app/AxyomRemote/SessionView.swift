@@ -182,6 +182,9 @@ struct SessionView: View {
                 lastSharedDraft = shared
             }
         }
+        .sheet(isPresented: Binding(get: { model.openFilePath != nil }, set: { if !$0 { model.openFilePath = nil } })) {
+            if let path = model.openFilePath { PCFileSheet(path: path, sessionId: sessionId, target: target).environmentObject(model) }
+        }
         .sheet(isPresented: $showInfo) { SessionInfoSheet(sessionId: sessionId, modelName: chosenModel?.name ?? modelLabel).environmentObject(model) }
         .safeAreaInset(edge: .bottom) { composer }
         .background(Theme.background)
@@ -726,7 +729,7 @@ struct SessionView: View {
         if !mine {
             VStack(alignment: .leading, spacing: 10) {
                 MarkdownText(text: item.text)
-                RefCards(refs: Refs.find(item.text), sessionId: sessionId, target: target)
+                RefCards(refs: Refs.find(item.text).filter { $0.kind == .image })
             }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contextMenu { copyButton(item.text) }
