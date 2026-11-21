@@ -10,6 +10,12 @@ final class LiveActivities {
     static let shared = LiveActivities()
     private var tokenTasks: [String: Task<Void, Never>] = [:]
     weak var client: RemoteClient?
+    /// What happened the last time we tried, shown in Settings so a silent failure has a reason.
+    private(set) var lastResult: String {
+        get { UserDefaults.standard.string(forKey: "liveActivityResult") ?? "Ainda não tentou arrancar." }
+        set { UserDefaults.standard.set(newValue, forKey: "liveActivityResult") }
+    }
+    private var startedAt: [String: Date] = [:]
 
     private var enabled: Bool { Prefs.liveActivity && ActivityAuthorizationInfo().areActivitiesEnabled }
 
@@ -24,19 +30,28 @@ final class LiveActivities {
 
     /// You just sent a prompt to this session from the phone.
     func start(for s: FleetSession, waitingCount: Int) {
-        guard enabled else { return }
+        guard Prefs.liveActivity else { lastResult = "Desligada nas Definições da app."; return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            lastResult = "O iPhone não permite Atividades em Direto para esta app (Definições do iPhone › AXYOM Remote)."
+            return
+        }
         var st = Self.state(for: s, waitingCount: waitingCount)
         if st.isDone { st.phase = "working" }       // the prompt is on its way: it is about to work
         if let a = current(s.id) {
+            startedAt[s.id] = Date()
             Task { await a.update(ActivityContent(state: st, staleDate: nil)) }
+            lastResult = "Atualizada (já existia)."
             return
         }
         let attrs = SessionActivityAttributes(sessionId: s.id, title: s.title, provider: s.provider)
         do {
             let a = try Activity.request(attributes: attrs, content: ActivityContent(state: st, staleDate: nil), pushType: .token)
+            startedAt[s.id] = Date()
             watchToken(a)
+            lastResult = "Arrancou às \(Date().formatted(date: .omitted, time: .shortened))."
         } catch {
-            // Not allowed (Low Power, user turned it off, too many): the session still works.
+            // The session still works; the reason is kept so Settings can show it.
+            lastResult = "Falhou ao arrancar: \(error.localizedDescription)"
         }
     }
 
@@ -60,6 +75,9 @@ final class LiveActivities {
             var st = Self.state(for: s, waitingCount: waiting)
             if st.phase == old.phase { st.since = old.since }
             guard st != old else { continue }
+            // Right after sending, the desktop has not started yet and still reports "done":
+            // give it a minute before treating "done" as the end.
+            if st.isDone, old.phase == "working", let t = startedAt[a.attributes.sessionId], Date().timeIntervalSince(t) < 60 { continue }
             if st.isDone {
                 end(a, final: st)
             } else {
@@ -72,7 +90,7 @@ final class LiveActivities {
 
     private func end(_ a: Activity<SessionActivityAttributes>, final st: SessionActivityAttributes.ContentState) {
         let sid = a.attributes.sessionId
-        tokenTasks[sid]?.cancel(); tokenTasks[sid] = nil
+        tokenTasks[sid]?.cancel(); tokenTasks[sid] = nil; startedAt[sid] = nil
         Task {
             await a.end(ActivityContent(state: st, staleDate: nil), dismissalPolicy: .after(Date().addingTimeInterval(15 * 60)))
             await client?.endActivityToken(sessionId: sid)

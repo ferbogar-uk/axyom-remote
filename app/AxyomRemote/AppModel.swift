@@ -248,7 +248,10 @@ final class AppModel: ObservableObject {
 
     /// A prompt just went to this session from the phone: show it in the Dynamic Island.
     func sessionPrompted(_ sessionId: String) {
-        guard let s = snapshot.sessions.first(where: { $0.id == sessionId }) else { return }
+        guard let s = snapshot.sessions.first(where: { $0.id == sessionId }) else {
+            UserDefaults.standard.set("Sessão não encontrada na lista ao enviar.", forKey: "liveActivityResult")
+            return
+        }
         LiveActivities.shared.start(for: s, waitingCount: snapshot.sessions.filter { $0.hasPendingPrompt && !$0.isArchived }.count)
     }
 
