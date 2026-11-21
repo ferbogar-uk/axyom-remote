@@ -51,6 +51,7 @@ struct SessionView: View {
     @State private var lastSharedDraft: String?
     @State private var draftTask: Task<Void, Never>?
     @State private var showInfo = false
+    @State private var showChanges = false
     @State private var pendingEffort: String?
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showPhotos = false
@@ -185,6 +186,11 @@ struct SessionView: View {
         .sheet(isPresented: Binding(get: { model.openFilePath != nil }, set: { if !$0 { model.openFilePath = nil } })) {
             if let path = model.openFilePath { PCFileSheet(path: path, sessionId: sessionId, target: target).environmentObject(model) }
         }
+        .sheet(isPresented: $showChanges) {
+            ChangesSheet(sessionId: sessionId, changes: ChangedFiles.build(visible)) { c in
+                draft = "Desfaz as alterações que fizeste em \(c.path)."
+            }
+        }
         .sheet(isPresented: $showInfo) { SessionInfoSheet(sessionId: sessionId, modelName: chosenModel?.name ?? modelLabel).environmentObject(model) }
         .safeAreaInset(edge: .bottom) { composer }
         .background(Theme.background)
@@ -214,6 +220,8 @@ struct SessionView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { searching = true; searchFocused = true } label: { Label("Procurar na conversa", systemImage: "magnifyingglass") }
+                    let changed = ChangedFiles.build(visible).count
+                    Button { showChanges = true } label: { Label(changed > 0 ? "Alterações (\(changed))" : "Alterações", systemImage: "plusminus.circle") }
                     Button { showInfo = true } label: { Label("Informação da sessão", systemImage: "info.circle") }
                     Button { Task { await fullLoad() } } label: { Label("Atualizar conversa", systemImage: "arrow.clockwise") }
                     Button { startConversation() } label: { Label("Conversa por voz", systemImage: "waveform") }
