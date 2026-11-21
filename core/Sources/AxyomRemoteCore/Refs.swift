@@ -71,8 +71,9 @@ public enum Refs {
     /// Replace bare links and PC paths in a reply with short Markdown links:
     /// "https://github.com/x/y/pull/8" → "[pull/8](…)", "C:\\…\\voz.png" → "[voz.png](axyom-file:…)".
     /// The cards under the message keep the full address.
-    public static func shortenInline(_ text: String) -> String {
+    public static func shortenInline(_ text: String, root: String? = nil) -> String {
         var out = linkPCPaths(in: text)
+        if let root, !root.isEmpty { out = linkRelativeFiles(in: out, root: root) }
         for ref in find(text, limit: 20).reversed() {
             let label: String
             let target: String
@@ -125,6 +126,69 @@ public enum Refs {
         }
         out += ns.substring(from: last)
         return out
+    }
+
+    static let relativeExt = #"(?:pdf|png|jpe?g|gif|webp|heic|md|markdown|txt|json|ya?ml|toml|csv|html?|css|scss|tsx?|jsx?|mjs|cjs|swift|py|rs|go|java|kt|rb|sh|sql|xml|docx?|xlsx?|pptx?)"#
+
+    /// The agent often names a file by its path inside the project ("packages/x/demo.pdf") or only
+    /// by its name ("demo.pdf") right next to that path. Make both tappable by joining the project
+    /// folder to the path, so the PC can be asked for the full path. A bare name is only linked when
+    /// the same reply also gives its path; otherwise there is nothing to join it to.
+    static func linkRelativeFiles(in text: String, root: String) -> String {
+        let sep = root.contains("\\") ? "\\" : "/"
+        let base = root.hasSuffix("/") || root.hasSuffix("\\") ? String(root.dropLast()) : root
+        func absolute(_ rel: String) -> String { base + sep + rel.replacingOccurrences(of: "/", with: sep) }
+        func link(_ label: String, _ rel: String) -> String {
+            "[\(label)](axyom-file:" + (absolute(rel).addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "") + ")"
+        }
+        let pathPattern = #"`?(?<![\w/\\:.@-])((?:\.{0,2}/)?(?:[\w.@-]+/)+[\w.@-]+\.\#(relativeExt))(?![\w/\-])`?"#
+        guard let pathRe = try? NSRegularExpression(pattern: pathPattern, options: [.caseInsensitive]) else { return text }
+        let ns = text as NSString
+        var known: [String: String] = [:]          // file name -> relative path
+        var out = ""
+        var last = 0
+        for m in pathRe.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+            let before = ns.substring(to: m.range.location)
+            if before.hasSuffix("](") || before.hasSuffix("(") && before.dropLast().hasSuffix("]") { continue }
+            var rel = ns.substring(with: m.range(at: 1))
+            if rel.hasPrefix("./") { rel = String(rel.dropFirst(2)) }
+            if rel.hasPrefix("../") { continue }
+            out += ns.substring(with: NSRange(location: last, length: m.range.location - last))
+            out += link(rel, rel)
+            last = m.range.location + m.range.length
+            known[(rel as NSString).lastPathComponent] = rel
+        }
+        out += ns.substring(from: last)
+        guard !known.isEmpty else { return text }
+        // Bare names, only in the text that is not already a link.
+        guard let linkRe = try? NSRegularExpression(pattern: #"\[[^\]\n]*\]\([^)\n]*\)"#) else { return out }
+        let o = out as NSString
+        var result = ""
+        var pos = 0
+        func plain(_ chunk: String) -> String {
+            var c = chunk
+            for (name, rel) in known {
+                let pat = #"`?(?<![\w/\\.@-])"# + NSRegularExpression.escapedPattern(for: name) + #"(?![\w\-]|/)`?"#
+                guard let re = try? NSRegularExpression(pattern: pat) else { continue }
+                let cn = c as NSString
+                var rebuilt = "", at = 0
+                for m in re.matches(in: c, range: NSRange(location: 0, length: cn.length)) {
+                    rebuilt += cn.substring(with: NSRange(location: at, length: m.range.location - at))
+                    rebuilt += link(name, rel)
+                    at = m.range.location + m.range.length
+                }
+                rebuilt += cn.substring(from: at)
+                c = rebuilt
+            }
+            return c
+        }
+        for m in linkRe.matches(in: out, range: NSRange(location: 0, length: o.length)) {
+            result += plain(o.substring(with: NSRange(location: pos, length: m.range.location - pos)))
+            result += o.substring(with: m.range)
+            pos = m.range.location + m.range.length
+        }
+        result += plain(o.substring(from: pos))
+        return result
     }
 
     /// The PC path inside an `axyom-file:` link.

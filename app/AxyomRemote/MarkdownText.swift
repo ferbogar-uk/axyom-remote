@@ -8,6 +8,8 @@ import UIKit
 struct MarkdownText: View {
     let text: String
     var color: Color = Theme.textSoft
+    /// The session's folder, to turn paths written inside the project into tappable files.
+    var projectRoot: String? = nil
     /// Code blocks start folded ("Código · 12 linhas"); tapped ones open.
     @State private var openCode: Set<Int> = []
 
@@ -109,7 +111,7 @@ struct MarkdownText: View {
     }
 
     private func inline(_ s: String) -> AttributedString {
-        let short = Refs.shortenInline(s)
+        let short = Refs.shortenInline(s, root: projectRoot)
         return (try? AttributedString(markdown: short, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace))) ?? AttributedString(s)
     }
 }

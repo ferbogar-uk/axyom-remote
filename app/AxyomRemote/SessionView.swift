@@ -736,7 +736,7 @@ struct SessionView: View {
         let mine = item.mine
         if !mine {
             VStack(alignment: .leading, spacing: 10) {
-                MarkdownText(text: item.text)
+                MarkdownText(text: item.text, projectRoot: session?.worktreePath ?? session?.projectId)
                 RefCards(refs: Refs.find(item.text).filter { $0.kind == .image })
             }
                 .frame(maxWidth: .infinity, alignment: .leading)

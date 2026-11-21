@@ -38,6 +38,7 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
     /// Set only when the session runs in a git worktree (request #9, client metadata).
     public var worktreeName: String?
     public var branch: String?
+    public var worktreePath: String?
 
     /// Dot rule, same as the desktop: yellow = needs you (question or permission),
     /// green = still working, blue = finished with something you haven't read. No dot otherwise.
@@ -96,6 +97,7 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
         var phase: String?
         var worktreeName: String?
         var branch: String?
+        var worktreePath: String?
         if let meta = entry.encryptedClientMetadata, let iv = entry.clientMetadataIv,
            let json = try? crypto.decrypt(ciphertext: meta, iv: iv),
            let value = try? JSONDecoder().decode(JSONValue.self, from: Data(json.utf8)) {
@@ -105,6 +107,7 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
             phase = value["phase"]?.string
             worktreeName = value["worktreeName"]?.string.flatMap { $0.isEmpty ? nil : $0 }
             branch = value["branch"]?.string.flatMap { $0.isEmpty ? nil : $0 }
+            worktreePath = value["worktreePath"]?.string.flatMap { $0.isEmpty ? nil : $0 }
         }
         var s = FleetSession(
             id: entry.sessionId,
@@ -134,6 +137,7 @@ public struct FleetSession: Equatable, Sendable, Identifiable {
         s.phase = phase
         s.worktreeName = worktreeName
         s.branch = branch
+        s.worktreePath = worktreePath
         s.isPinned = entry.isPinned ?? false
         return s
     }
