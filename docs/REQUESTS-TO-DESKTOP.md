@@ -473,7 +473,24 @@ O desktop aplica as mesmas regras (dentro do workspace/worktree, mencionado pelo
 e responde na sala da sessão com `{ type: "fileText", path, encryptedText, iv }`: texto UTF-8 cifrado como uma
 mensagem, no máximo ~200 KB (cortar e marcar `truncated: true` se for maior). Ficheiros binários: ignorar.
 
-Estado: por fazer (desktop e servidor: o servidor tem de reencaminhar `fileText` como faz com `filePreview`).
+Status: done on the desktop/server (21 Nov 2026, desktop axyom-redesign-backup e95774d / build release42; server axyom-backend 8936100, deployed). (Was: "Estado: por fazer".) Notes for the phone:
+- Ask with sessionControl `messageType: "file_text"`, `payload: { path }`. A `file_preview` for a text
+  path is also answered with text, so either works; images/PDFs keep getting `filePreview`.
+- Answer in the session room: `{ type: "fileText", path, encryptedText, iv, truncated }`. The plaintext of
+  `encryptedText` is the UTF-8 text itself (not base64), encrypted with the session key like a message,
+  BOM removed. At most 200 KB; bigger files are cut on a character boundary and `truncated` is `true`
+  (the server always sends `truncated` as a boolean).
+- Same rules as #9 (inside workspace/worktree with symlinks resolved, mentioned by the agent in its last
+  400 messages). Plus: only known text types (md, txt, log, csv, ts/tsx/js/json, yml/toml/ini, html/css/svg,
+  swift/kt/java/py/go/rs/c/cs, sql, sh/ps1/bat, README/LICENSE/Dockerfile/Makefile, .gitignore, ...);
+  never secrets (`.env*`, `.npmrc`, keys/certs, `id_rsa`, names with "secret"); binary content is refused.
+  When refused, nothing is sent (the phone should time out as with #9).
+- Server: relays `fileText`, never stores it, max 400 000 chars of ciphertext (`too_large`), missing fields
+  `bad_message` (sync/PROTOCOL.md "File text in the session room (request #15)").
+- Tested: desktop unit tests (6 new + 7 of #9 pass), server unit tests (47 pass), tsc (the usual 6 errors).
+  NOT tested: end to end with the phone, the server relay live (smoke.mjs has a new check but was not run),
+  and the new build release42 was not opened: the running AXYOM was left open; the desktop shortcut points
+  to release42, so it is used from the next launch.
 
 ## Nota sobre o #9 (21 Nov 2026)
 
