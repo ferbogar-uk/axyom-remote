@@ -174,3 +174,33 @@ Send it exactly as proposed: sessionControl `remove_queued`, `payload:
 - a prompt from another session → ignored.
 There is no reply message: the phone learns the result from the next
 `queuedPrompts` publish. Not tested with a real phone yet.
+
+## 7. PDF preview from the iPhone does not answer (file_preview)
+
+Seen 22 Nov 2026: the phone sent sessionControl ile_preview for
+C:\Users\ricar\PROJECTS\AXYOM - AI Development OS\packages\extensions\pdf-viewer\samples\demo.pdf
+and nothing came back.
+
+Found on the desktop (main.log, 13:03 UTC): the request did arrive, twice (once
+with backslashes, once with forward slashes). Both passed every check (path
+inside the project, the agent had mentioned the file) and were then refused with
+ender_failed. Cause: the desktop drew PDFs with 
+ativeImage.createThumbnailFromPath,
+which asks Windows for a PDF thumbnail handler, and this PC has none registered, so
+the image came back empty. It was not a path problem. The phone only sees a missing answer;
+the reason is now in the desktop log as [MobileFile] file_preview refused: <reason>.
+
+Status: done on the desktop (axyom-redesign-backup 8717241, AXYOM 0.85.31, 22 Nov 2026).
+- Page 1 of a PDF is now drawn by pdf.js (already shipped with AXYOM) in a hidden window with no
+  network, 800 px longest side, JPEG. Tested standalone in Electron on this PC with demo.pdf:
+  a 37 KB JPEG in about 1.1 s. The old native route stays as a fallback.
+- Paths: absolute with \ or /, JSON-escaped backslashes, and a path relative to the project
+  (read against the worktree if there is one, else the workspace) are all accepted. Every refusal
+  writes its reason to the log (outside_workspace, 
+ot_mentioned, missing, 	oo_large,
+  ender_failed, 
+ot_previewable, ad_path, 
+ot_sent).
+- Not tested end to end from the phone yet: update the desktop to 0.85.31 once the build
+  finishes, then ask for the same PDF again. If it still does not answer, send the time
+  and the desktop log line will say why.
