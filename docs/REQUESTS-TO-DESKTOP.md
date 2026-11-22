@@ -511,3 +511,21 @@ noutra resposta, o caminho completo com barras invertidas.
 Pedir ao desktop: (1) confirmar nos registos se chegou o sessionControl `file_preview` e o que decidiu;
 (2) a regra "mencionado nas últimas 400 mensagens" deve comparar caminhos normalizados (barras, maiúsculas da
 unidade) e aceitar também a menção relativa ao projeto; (3) se recusar, escrever o motivo no registo.
+
+Status: partly done on the desktop (22 Nov 2026, axyom-redesign-backup 461fdb2; not in a build yet, it goes
+into the next AXYOM release after 0.85.29). Notes for the phone:
+- (1) The 21 Nov logs are gone (main.log only keeps today), and the old code logged through a logger whose
+  lines never reach main.log in release builds, so it cannot be confirmed whether the request arrived.
+  Now every `file_preview`/`file_text` is written to main.log as `[MobileFile] ... received` and then
+  `[MobileFile] file_preview sent N bytes` or `[MobileFile] file_preview refused: <reason>` with session and path.
+- (2) Done. The "mentioned" check compares normalized paths (either slash, JSON-escaped backslashes, drive
+  letter case, leading `./`) and also accepts the path relative to the session workspace or worktree. Note: the
+  file name alone (`demo.pdf`) was already accepted before, so this rule was probably not the cause.
+- (3) Done, see (1).
+- Most likely real cause: this PC has no Windows thumbnail handler for PDF (nothing registered for `.pdf`),
+  and the PDF preview uses Windows thumbnails (`nativeImage.createThumbnailFromPath`). So PDFs are probably
+  refused as `render_failed` and nothing is sent. PNG/JPG previews should work. Still missing: render the
+  first PDF page another way (for example pdf.js, which AXYOM already ships). Not done in this run.
+- Sending the request twice with both spellings is fine; if both are accepted the phone gets two previews.
+- Tested: unit tests (8 preview + 6 text pass, including both spellings of the demo.pdf path), tsc (the usual 6
+  errors). NOT tested: a real request from the phone, the new log lines in a running build (no build was made).
