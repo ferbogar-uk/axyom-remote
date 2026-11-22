@@ -21,6 +21,13 @@ final class AppModel: ObservableObject {
     /// Pictures of PC files the agent mentioned (request #9), by "session|path". This run only.
     /// A file name tapped in a reply: the session screen shows it in a sheet.
     @Published var openFilePath: String?
+    /// The PC picked in the switch on the home screen (nil = all PCs). Kept between launches.
+    @Published var selectedPC: String? = UserDefaults.standard.string(forKey: "selectedPC") {
+        didSet { UserDefaults.standard.set(selectedPC, forKey: "selectedPC") }
+    }
+    var pcChoices: [PCChoice] { PCSwitch.choices(devices: snapshot.devices, sessions: snapshot.sessions) }
+    /// Sessions of the PC in the switch (all of them when none is picked).
+    var visibleSessions: [FleetSession] { PCSwitch.filter(snapshot.sessions, device: selectedPC, devices: snapshot.devices) }
     @Published private(set) var filePreviews: [String: Data] = [:]
     /// Asked but not answered yet / gave up waiting (the PC refuses silently for paths it does not allow).
     /// Text of code/text files from the PC (request #15), by the same key.
@@ -198,11 +205,11 @@ final class AppModel: ObservableObject {
 
     /// The online PC that holds this project (by its encrypted id), else any online PC.
     func desktopId(forEncryptedProjectId encrypted: String?) -> String? {
-        DesktopRouting.desktop(forEncryptedProjectId: encrypted, devices: snapshot.devices)?.deviceId
+        DesktopRouting.desktop(forEncryptedProjectId: encrypted, devices: snapshot.devices, preferred: selectedPC)?.deviceId
     }
 
     func board(project: String? = nil) -> FleetBoard {
-        FleetBoard.build(snapshot.sessions, project: project)
+        FleetBoard.build(visibleSessions, project: project)
     }
 
     // MARK: Pairing

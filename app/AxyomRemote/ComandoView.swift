@@ -28,6 +28,7 @@ struct ComandoView: View {
                     header
                     statusBanner
                     UsageRings(usage: model.snapshot.planUsage) { plan in usagePlan = plan }
+                    if model.pcChoices.count > 1 { pcSwitch }
                     if board.projects.count > 1 { projectChips(board) }
                     searchField
                     waitingCards(board.waiting)
@@ -124,6 +125,38 @@ struct ComandoView: View {
                     .font(.footnote).foregroundStyle(Theme.muted)
             }
             .card(stroke: Theme.borderStrong)
+        }
+    }
+
+    /// One PC at a time, or all. Shown only when the account has more than one PC.
+    private var pcSwitch: some View {
+        let choices = model.pcChoices
+        let picked = model.selectedPC.flatMap { id in choices.contains { $0.id == id } ? id : nil }
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                pcChip(title: "Todos os PCs", dot: nil, badge: nil, on: picked == nil) { model.selectedPC = nil; project = nil }
+                ForEach(choices) { c in
+                    pcChip(title: c.name, dot: c.online ? Color.green : Theme.muted, badge: c.attentionCount > 0 ? c.attentionCount : nil, on: picked == c.id) {
+                        model.selectedPC = c.id; project = nil
+                    }
+                    .accessibilityLabel("\(c.name), \(c.online ? "ligado" : "desligado"), \(c.sessionCount) sessões")
+                }
+            }
+        }
+    }
+
+    private func pcChip(title: String, dot: Color?, badge: Int?, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: { Prefs.tap(); action() }) {
+            HStack(spacing: 7) {
+                Image(systemName: "desktopcomputer").font(.footnote)
+                Text(title).font(.subheadline.weight(on ? .semibold : .regular)).lineLimit(1)
+                if let dot { Circle().fill(dot).frame(width: 8, height: 8) }
+                if let badge { Text("\(badge)").font(.caption2.weight(.bold)).foregroundStyle(.black).padding(.horizontal, 6).padding(.vertical, 2).background(Theme.accent, in: Capsule()) }
+            }
+            .foregroundStyle(on ? Theme.background : Theme.text)
+            .padding(.horizontal, 14).frame(minHeight: 44)
+            .background(on ? Theme.text : .clear, in: Capsule())
+            .overlay(Capsule().stroke(on ? .clear : Theme.borderStrong, lineWidth: 1))
         }
     }
 
@@ -273,7 +306,7 @@ struct ComandoView: View {
     /// All sessions of the chosen project, nested and grouped by day like the PC.
     private var treeSections: [SessionTree.Section] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
-        let all = model.snapshot.sessions.filter { project == nil || $0.projectId == project }
+        let all = model.visibleSessions.filter { project == nil || $0.projectId == project }
         let match: (FleetSession) -> Bool = {
             q.isEmpty || $0.title.lowercased().contains(q) || $0.projectName.lowercased().contains(q)
                 || ProviderName.display($0.provider).lowercased().contains(q)

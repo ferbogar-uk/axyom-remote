@@ -125,8 +125,10 @@ public enum ModelPicker {
 public enum DesktopRouting {
     /// The online desktop that reported holding this project (by its encrypted
     /// project id), else the first online desktop, else nil.
-    public static func desktop(forEncryptedProjectId encrypted: String?, devices: [DeviceInfo]) -> DeviceInfo? {
+    /// `preferred` is the PC picked in the switch: it wins while it is online.
+    public static func desktop(forEncryptedProjectId encrypted: String?, devices: [DeviceInfo], preferred: String? = nil) -> DeviceInfo? {
         let online = devices.filter { $0.type == "desktop" && $0.isOnline == true }
+        if let preferred, let pick = online.first(where: { $0.deviceId == preferred }) { return pick }
         if let encrypted, let match = online.first(where: { $0.syncedProjectIds?.contains(encrypted) == true }) {
             return match
         }
