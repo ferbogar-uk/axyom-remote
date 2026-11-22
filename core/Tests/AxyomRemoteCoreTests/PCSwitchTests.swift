@@ -38,4 +38,11 @@ final class PCSwitchTests: XCTestCase {
         let off = device("b", "B", online: false)
         XCTAssertEqual(DesktopRouting.desktop(forEncryptedProjectId: "encA", devices: [a, off], preferred: "b")?.deviceId, "a", "offline preferred PC is skipped")
     }
+
+    func testNicknameWinsAndBlankIsIgnored() {
+        let d = device("a", "DESKTOP-9X", online: true)
+        XCTAssertEqual(PCSwitch.displayName(d, nicknames: ["a": " Casa "]), "Casa")
+        XCTAssertEqual(PCSwitch.displayName(d, nicknames: ["a": "  "]), "DESKTOP-9X")
+        XCTAssertEqual(PCSwitch.choices(devices: [d], sessions: [], nicknames: ["a": "Casa"]).first?.name, "Casa")
+    }
 }

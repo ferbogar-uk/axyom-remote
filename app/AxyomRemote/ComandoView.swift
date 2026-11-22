@@ -7,6 +7,8 @@ import AxyomRemoteCore
 /// Approving and replying happen inside each session.
 struct ComandoView: View {
     @EnvironmentObject private var model: AppModel
+    @State private var renaming: PCChoice?
+    @State private var renameText = ""
     @State private var project: String?
     @State private var showNew = false
     @State private var showVoice = false
@@ -130,6 +132,15 @@ struct ComandoView: View {
 
     /// One PC at a time, or all. Shown only when the account has more than one PC.
     private var pcSwitch: some View {
+        pcSwitchRow
+            .alert("Nome deste PC", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+                TextField("Ex.: Escritório", text: $renameText)
+                Button("Guardar") { if let r = renaming { model.pcNicknames[r.id] = renameText.trimmingCharacters(in: .whitespaces) }; renaming = nil }
+                Button("Cancelar", role: .cancel) { renaming = nil }
+            } message: { Text("Só neste iPhone. Para mudar no próprio AXYOM, use as definições do desktop.") }
+    }
+
+    private var pcSwitchRow: some View {
         let choices = model.pcChoices
         let picked = model.selectedPC.flatMap { id in choices.contains { $0.id == id } ? id : nil }
         return ScrollView(.horizontal, showsIndicators: false) {
@@ -138,6 +149,10 @@ struct ComandoView: View {
                 ForEach(choices) { c in
                     pcChip(title: c.name, dot: c.online ? Color.green : Theme.muted, badge: c.attentionCount > 0 ? c.attentionCount : nil, on: picked == c.id) {
                         model.selectedPC = c.id; project = nil
+                    }
+                    .contextMenu {
+                        Button { renameText = c.name; renaming = c } label: { Label("Dar nome a este PC", systemImage: "pencil") }
+                        if model.pcNicknames[c.id] != nil { Button(role: .destructive) { model.pcNicknames[c.id] = nil } label: { Label("Usar o nome do AXYOM", systemImage: "arrow.uturn.backward") } }
                     }
                     .accessibilityLabel("\(c.name), \(c.online ? "ligado" : "desligado"), \(c.sessionCount) sessões")
                 }

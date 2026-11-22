@@ -529,3 +529,16 @@ into the next AXYOM release after 0.85.29). Notes for the phone:
 - Sending the request twice with both spellings is fine; if both are accepted the phone gets two previews.
 - Tested: unit tests (8 preview + 6 text pass, including both spellings of the demo.pdf path), tsc (the usual 6
   errors). NOT tested: a real request from the phone, the new log lines in a running build (no build was made).
+
+## 16. Nome do PC definido dentro do AXYOM (22 Nov 2026)
+
+Ricardo usa o AXYOM em dois PCs e quer dar um nome a cada um **dentro do AXYOM** (ex.: "Escritório", "Casa"),
+para o iPhone os distinguir no switch de PC.
+
+Pedir ao desktop: (1) uma definição "Nome deste computador" (Settings), com valor por omissão = nome da máquina;
+(2) enviar esse nome em `DeviceInfo.name` do dispositivo desktop no índice de sincronização, e atualizá-lo
+quando mudar (sem reiniciar); (3) nomes diferentes por PC; se dois PCs tiverem o mesmo nome, acrescentar um
+sufixo curto do deviceId.
+
+O iPhone já mostra `DeviceInfo.name` e deixa pôr um apelido local (toque longo no chip do PC) que vence o nome
+do desktop. Não testado com um desktop real.

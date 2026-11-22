@@ -59,7 +59,7 @@ struct SettingsView: View {
                         HStack(spacing: 14) {
                             Image(systemName: "laptopcomputer").frame(width: 26).foregroundStyle(Theme.text)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(pc.name).foregroundStyle(Theme.text)
+                                Text(model.pcName(pc)).foregroundStyle(Theme.text)
                                 HStack(spacing: 6) {
                                     Circle().fill(pc.isOnline == true ? Theme.green : Theme.muted).frame(width: 7, height: 7)
                                     Text(pc.isOnline == true ? "Ligado" : "Desligado").font(.footnote).foregroundStyle(Theme.muted)

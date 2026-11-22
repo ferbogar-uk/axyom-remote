@@ -25,7 +25,12 @@ final class AppModel: ObservableObject {
     @Published var selectedPC: String? = UserDefaults.standard.string(forKey: "selectedPC") {
         didSet { UserDefaults.standard.set(selectedPC, forKey: "selectedPC") }
     }
-    var pcChoices: [PCChoice] { PCSwitch.choices(devices: snapshot.devices, sessions: snapshot.sessions) }
+    /// Nicknames given on the phone, by deviceId. They win over the name the desktop reports.
+    @Published var pcNicknames: [String: String] = (UserDefaults.standard.dictionary(forKey: "pcNicknames") as? [String: String]) ?? [:] {
+        didSet { UserDefaults.standard.set(pcNicknames, forKey: "pcNicknames") }
+    }
+    func pcName(_ d: DeviceInfo) -> String { PCSwitch.displayName(d, nicknames: pcNicknames) }
+    var pcChoices: [PCChoice] { PCSwitch.choices(devices: snapshot.devices, sessions: snapshot.sessions, nicknames: pcNicknames) }
     /// Sessions of the PC in the switch (all of them when none is picked).
     var visibleSessions: [FleetSession] { PCSwitch.filter(snapshot.sessions, device: selectedPC, devices: snapshot.devices) }
     @Published private(set) var filePreviews: [String: Data] = [:]

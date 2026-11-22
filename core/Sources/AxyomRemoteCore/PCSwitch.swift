@@ -17,13 +17,19 @@ public enum PCSwitch {
         session.hostDeviceId ?? DesktopRouting.desktop(forEncryptedProjectId: session.encryptedProjectId, devices: devices)?.deviceId
     }
 
+    /// A nickname set on the phone wins over the name the desktop reports; blank nicknames are ignored.
+    public static func displayName(_ device: DeviceInfo, nicknames: [String: String]) -> String {
+        let n = nicknames[device.deviceId]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return n.isEmpty ? device.name : n
+    }
+
     /// Desktops only, online first, then by name. Counts ignore archived sessions.
-    public static func choices(devices: [DeviceInfo], sessions: [FleetSession]) -> [PCChoice] {
+    public static func choices(devices: [DeviceInfo], sessions: [FleetSession], nicknames: [String: String] = [:]) -> [PCChoice] {
         let live = sessions.filter { !$0.isArchived }
         return devices.filter { $0.type == "desktop" }
             .map { d in
                 let mine = live.filter { host(of: $0, devices: devices) == d.deviceId }
-                return PCChoice(id: d.deviceId, name: d.name, online: d.isOnline == true,
+                return PCChoice(id: d.deviceId, name: displayName(d, nicknames: nicknames), online: d.isOnline == true,
                                 sessionCount: mine.count, attentionCount: mine.filter(\.hasPendingPrompt).count)
             }
             .sorted { ($0.online ? 0 : 1, $0.name.lowercased()) < ($1.online ? 0 : 1, $1.name.lowercased()) }
