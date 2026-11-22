@@ -120,6 +120,8 @@ struct SettingsView: View {
                         .onChange(of: liveActivity) { _, on in if !on { LiveActivities.shared.endAll() } }
                     row("waveform.path.ecg", "Estado da Live Activity", detail: LiveActivities.shared.lastResult)
                         .listRowBackground(Theme.surface)
+                    row("link", "Último toque num widget ou na ilha", detail: UserDefaults.standard.string(forKey: "lastOpenURL") ?? "Nenhum link chegou à app ainda.")
+                        .listRowBackground(Theme.surface)
                     toggleRow("faceid", "Pedir Face ID ao abrir", isOn: $faceID)
                     row("iphone.radiowaves.left.and.right", "Avisos com a app fechada", detail: model.pushStatus)
                         .listRowBackground(Theme.surface)

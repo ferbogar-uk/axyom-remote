@@ -16,7 +16,14 @@ struct AxyomRemoteApp: App {
                 .overlay { if lock.locked { LockScreen(lock: lock).transition(.opacity) } }
                 // Taps on the widget: axyom://session/<id> opens that conversation.
                 .onOpenURL { url in
-                    if case .session(let id)? = DeepLink(url) { model.openRequest = id }
+                    let link = DeepLink(url)
+                    var what = "link não reconhecido"
+                    switch link {
+                    case .session(let id)?: model.openRequest = id; what = "abrir a sessão"
+                    case .home?: what = "abrir o início"
+                    case nil: break
+                    }
+                    UserDefaults.standard.set("\(Date().formatted(date: .omitted, time: .standard)) · \(url.absoluteString.prefix(60)) → \(what)", forKey: "lastOpenURL")
                 }
                 .onChange(of: phase) { _, p in
                     if p == .background { lock.wentToBackground() }
