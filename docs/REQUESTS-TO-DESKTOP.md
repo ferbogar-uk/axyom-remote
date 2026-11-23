@@ -542,3 +542,18 @@ sufixo curto do deviceId.
 
 O iPhone já mostra `DeviceInfo.name` e deixa pôr um apelido local (toque longo no chip do PC) que vence o nome
 do desktop. Não testado com um desktop real.
+
+Status: done on the desktop/server (23 Nov 2026, desktop axyom-redesign-backup 338a38c9b; not in a build yet, it goes
+into the next AXYOM release after 0.85.34; no server change needed). Notes for the phone:
+- (1) Settings > Mobile App (the "Pair a device" card) has a field "Name of this computer". Empty = the machine
+  name as before (friendly form, e.g. "Home Laptop"); max 40 characters, single line. Saved on Enter or when the
+  field loses focus (app setting `syncDeviceName`).
+- (2) The name goes out as `DeviceInfo.name` in every `deviceAnnounce`. The desktop re-announces every 30 s and the
+  server answers each announce with `devicesList` to everyone, so a rename reaches the phone within about 30 s,
+  no restart. The pairing code (`desktopName`) and the plan usage snapshot (`desktopName`) use the same name.
+- (3) If another connected computer (not a phone) has the same name, ignoring case, each adds ` (xxxx)` with the
+  last 4 letters/digits of its own deviceId, e.g. "Casa (12ab)". The comparison ignores an existing suffix, so the
+  suffix stays stable and does not flip every 30 s. Only computers online at the same time are compared.
+- Tested: unit tests (4 new in deviceDisplayName.test.ts, plan usage tests still pass), tsc (the usual 6 errors).
+  NOT tested: a running build, the Settings field on screen, the phone receiving the new name, two PCs with the same
+  name. SyncManager.deviceJoin.test.ts could not run in the test worktree (missing runtime dist), unrelated to this.
